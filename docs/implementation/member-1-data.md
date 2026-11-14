@@ -330,10 +330,10 @@ missing data into zero.
 - [x] Two identical imports produce no duplicate rows.
 - [x] `monthly_counts` contains both instruments and coverage flags.
 - [ ] `monthly_harmonized` flags all MODIS-converted months.
-- [ ] Factors contain method, scope, overlap years, correlation, and error.
-- [ ] Correlation, error, leave-one-year-out, and anomaly-consistency
+- [x] Factors contain method, scope, overlap years, correlation, and error.
+- [x] Correlation, error, leave-one-year-out, and anomaly-consistency
       results are in `docs/HARMONIZATION.md`.
-- [ ] Three source counts and one cell-day have been independently checked.
+- [x] Three source counts and one cell-day have been independently checked.
 - [ ] `DATA_ATTRIBUTION`, `DATA_LIMITATIONS`, and `HARMONIZATION_NOTE` exist.
 
 ## 10. If you are blocked

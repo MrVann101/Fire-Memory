@@ -297,6 +297,10 @@ The `aggregate-report.json` explicitly records
 `databaseLoaded=false` and `databaseRowsInserted=0`.
 The aggregate report SHA-256 is
 `59494856FB7659A593C46704156EF1BED3BBFB4FCCE81741757B311F1BA8C783`.
+Provisional factors, validation measurements, and the limited direct-VIIRS
+series are described in [HARMONIZATION.md](HARMONIZATION.md); the current
+data does not support estimated historical rows without making an
+unsupported coverage assumption.
 
 ## Administrative boundaries
 
