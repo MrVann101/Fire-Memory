@@ -1,4 +1,4 @@
-# Member 4 Actionable Task Plan — AI, Export & Presentation (`5d2b80c` Verified State)
+ # Member 4 Actionable Task Plan — AI, Export & Presentation (`5d2b80c` Verified State)
 
 > **Source of truth verified against:** `FIRE_MEMORY_Work_Plan.md`, `FIRE_MEMORY_Project_Documentation_Philippines.md`, `FIRE_MEMORY_Agent_Prompts.md`, `docs/implementation/00-overview.md`, `docs/implementation/member-4-ai-export.md`, `src/app/api/{ai,export}/**/*.ts`, `src/lib/{ai,export}/*.ts`, `src/components/{assistant,export}/*.tsx`, `tests/ai/*.test.mjs`, `docs/presentation/*.md`, `docs/DEMO_SCRIPT.md`, and live runtime verification on `next start`.
 

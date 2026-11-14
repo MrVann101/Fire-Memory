@@ -133,36 +133,36 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
   return (
     <section
       aria-labelledby="assistant-panel-title"
-      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      className="assistant-panel"
     >
-      <div className="mb-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+      <div className="assistant-header">
+        <p className="assistant-eyebrow">
           Feature 04 · Gemini AI
         </p>
-        <h2 id="assistant-panel-title" className="mt-1 text-xl font-semibold text-slate-950">
+        <h2 id="assistant-panel-title" className="assistant-title">
           Gemini AI assistant
         </h2>
-        <p className="mt-2 text-sm text-slate-600">
+        <p className="assistant-intro">
           Get an explanation of the selected fire-activity data and historical
           comparison.
         </p>
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2" aria-label="Suggested questions">
+      <div className="assistant-suggestions" aria-label="Suggested questions">
         {SUGGESTED_QUESTIONS.map((suggestedQuestion) => (
           <button
             key={suggestedQuestion}
             type="button"
             onClick={() => chooseSuggestedQuestion(suggestedQuestion)}
             disabled={!summary || isLoading}
-            className="rounded-full border border-slate-300 px-3 py-2 text-left text-xs text-slate-700 transition hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
+            className="assistant-suggestion"
           >
             {suggestedQuestion}
           </button>
         ))}
       </div>
 
-      <form onSubmit={submitQuestion}>
+      <form className="assistant-form" onSubmit={submitQuestion}>
         <label htmlFor="assistant-question" className="sr-only">
           Question for the AI interpretation
         </label>
@@ -173,18 +173,18 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
           maxLength={AI_MAX_QUESTION_LENGTH}
           rows={3}
           placeholder="Ask a question about the selected region and period"
-          className="w-full resize-y rounded-xl border border-slate-300 px-3 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-500"
+          className="assistant-question"
           aria-describedby="assistant-question-help assistant-error"
           disabled={isLoading || !summary}
         />
-        <div className="mt-2 flex items-center justify-between gap-3">
-          <p id="assistant-question-help" className="text-xs text-slate-500">
+        <div className="assistant-form-footer">
+          <p id="assistant-question-help" className="assistant-input-help">
             {question.length}/{AI_MAX_QUESTION_LENGTH} characters
           </p>
           <button
             type="submit"
             disabled={isLoading || !summary}
-            className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            className="assistant-submit"
           >
             {isLoading ? "Interpreting..." : "Ask Gemini"}
           </button>
@@ -195,7 +195,7 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
         <p
           id="assistant-error"
           role="alert"
-          className="mt-4 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800"
+          className="assistant-error"
         >
           {error}
         </p>
@@ -203,32 +203,30 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
 
       <div
         aria-live="polite"
-        className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"
+        className="assistant-answer"
       >
-        <h3 className="text-sm font-semibold text-slate-900">
-          Data explanation
-        </h3>
+        <h3 className="assistant-answer-title">Data explanation</h3>
         {isLoading ? (
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="assistant-answer-copy">
             Preparing an interpretation from the supplied analytics...
           </p>
         ) : answer ? (
-          <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
+          <p className="assistant-answer-copy assistant-answer-result">
             {answer}
           </p>
         ) : !summary ? (
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="assistant-answer-copy">
             Select a region and month to enable explanations grounded in the
             dashboard analytics.
           </p>
         ) : (
-          <p className="mt-2 text-sm text-slate-600">
+          <p className="assistant-answer-copy">
             Ask a question to receive a data-grounded interpretation.
           </p>
         )}
       </div>
 
-      <p className="mt-4 border-t border-slate-200 pt-3 text-xs leading-5 text-slate-500">
+      <p className="assistant-disclaimer">
         {disclaimer}
       </p>
     </section>

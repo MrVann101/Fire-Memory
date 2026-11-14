@@ -11,6 +11,32 @@ import type {
 } from "@/contracts/types";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 
+type ActivityBand = "low" | "moderate" | "high" | "very-high";
+type BubbleBand = ActivityBand | "no-data";
+
+const BUBBLE_COLORS: Record<BubbleBand, { stroke: string; fill: string }> = {
+  low: { stroke: "#047857", fill: "#10b981" },
+  moderate: { stroke: "#b45309", fill: "#f59e0b" },
+  high: { stroke: "#c2410c", fill: "#f97316" },
+  "very-high": { stroke: "#b91c1c", fill: "#ef4444" },
+  "no-data": { stroke: "#475569", fill: "#64748b" },
+};
+
+function getActivityBand(count: number, maxCount: number): ActivityBand {
+  const relativeCount = maxCount > 0 ? count / maxCount : 0;
+  if (relativeCount < 0.25) return "low";
+  if (relativeCount < 0.5) return "moderate";
+  if (relativeCount < 0.75) return "high";
+  return "very-high";
+}
+
+function getClusterBand(count: number): ActivityBand {
+  if (count >= 100) return "very-high";
+  if (count >= 50) return "high";
+  if (count >= 10) return "moderate";
+  return "low";
+}
+
 function displayValue(value: string | number | null): string {
   return value === null ? "Not available" : String(value);
 }
@@ -58,6 +84,19 @@ function DetectionLayer({ hotspots }: { hotspots: Hotspot[] }) {
       chunkDelay: 20,
       maxClusterRadius: 48,
       showCoverageOnHover: false,
+      iconCreateFunction: (cluster) => {
+        const count = cluster.getChildCount();
+        const band = getClusterBand(count);
+        const size =
+          count >= 100 ? 54 : count >= 50 ? 48 : count >= 10 ? 42 : 36;
+
+        return L.divIcon({
+          className: `telemetry-cluster telemetry-cluster--${band}`,
+          html: `<span>${count.toLocaleString("en-US")}</span>`,
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
+        });
+      },
     });
 
     for (const hotspot of hotspots) {
@@ -136,11 +175,16 @@ function ChildBubbleLayer({
         child.count === null
           ? "No data"
           : `${child.count.toLocaleString("en-US")} detections`;
+      const band =
+        child.count === null
+          ? "no-data"
+          : getActivityBand(child.count, maxCount);
+      const colors = BUBBLE_COLORS[band];
       const bubble = L.circleMarker([latitude, longitude], {
         radius,
-        color: "#143f50",
+        color: colors.stroke,
         weight: 2,
-        fillColor: "#368d85",
+        fillColor: colors.fill,
         fillOpacity: 0.78,
         bubblingMouseEvents: false,
       });
@@ -257,7 +301,7 @@ function RectangleDrawControl({
       }
       start = event.latlng;
       rectangle = L.rectangle(L.latLngBounds(start, start), {
-        color: "#bd4e2f",
+        color: "#f97316",
         weight: 2,
         dashArray: "6 4",
         fillOpacity: 0.12,

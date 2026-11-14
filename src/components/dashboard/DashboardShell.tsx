@@ -6,8 +6,6 @@ import type {
   AnalyticsSummary,
   BBox,
   HarmonizationResponse,
-  Instrument,
-  Metric,
   HotspotFilters,
   Region,
 } from "@/contracts/types";
@@ -20,6 +18,7 @@ import {
 import { AssistantPanel } from "@/components/assistant/AssistantPanel";
 import { ExportButton } from "@/components/export/ExportButton";
 import MapView from "@/components/map/MapView";
+import { useDashboardFilters } from "@/components/dashboard/DashboardFiltersProvider";
 import {
   useCalendar,
   useChildren,
@@ -75,32 +74,39 @@ type BBoxDraft = {
 };
 type DashboardNavItem = {
   href: string;
+  feature: DashboardFeature;
   icon: "map" | "calendar" | "analytics" | "assistant" | "export";
   label: string;
 };
+type DashboardFeature = "map" | "calendar" | "anomaly" | "assistant" | "export";
 const dashboardNavItems: DashboardNavItem[] = [
   {
-    href: "#map-title",
+    href: "/",
+    feature: "map",
     icon: "map",
     label: "MAP",
   },
   {
-    href: "#calendar-title",
+    href: "/calendar",
+    feature: "calendar",
     icon: "calendar",
     label: "Calendar",
   },
   {
-    href: "#anomaly-title",
+    href: "/anomaly",
+    feature: "anomaly",
     icon: "analytics",
     label: "Anomaly Detection",
   },
   {
-    href: "#assistant-panel-title",
+    href: "/assistant",
+    feature: "assistant",
     icon: "assistant",
     label: "AI Assistant",
   },
   {
-    href: "#export-controls-title",
+    href: "/export",
+    feature: "export",
     icon: "export",
     label: "CSV Export",
   },
@@ -219,19 +225,23 @@ function validateBBox(bbox: BBox, countryBBox: BBox | undefined): string | null 
   return null;
 }
 export default function DashboardShell({
-  isSimulated,
+  activeFeature,
 }: {
-  isSimulated: boolean;
+  activeFeature: DashboardFeature;
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
-  const [regionId, setRegionId] = useState(isSimulated ? "PH-BUK" : "PH");
-  const [metric, setMetric] = useState<Metric>("harmonized");
-  const [instrument, setInstrument] = useState<Instrument | "ALL">("ALL");
-  const [periodSelection, setPeriodSelection] = useState<string | null>(
-    isSimulated ? "2026-11" : null
-  );
-  const [customBbox, setCustomBbox] = useState<BBox | null>(null);
+  const {
+    regionId,
+    setRegionId,
+    metric,
+    setMetric,
+    instrument,
+    setInstrument,
+    periodSelection,
+    setPeriodSelection,
+    customBbox,
+    setCustomBbox,
+  } = useDashboardFilters();
   const [bboxDraft, setBboxDraft] = useState<BBoxDraft>({
     west: "124.90",
     south: "7.80",
@@ -286,7 +296,7 @@ export default function DashboardShell({
       setCustomAreaError(null);
       setIsDrawingArea(false);
     },
-    [countryBBox]
+    [countryBBox, setCustomBbox, setRegionId]
   );
   const applyCustomArea = useCallback(() => {
     if (
@@ -411,10 +421,10 @@ export default function DashboardShell({
   ]);
   const handleSelectRegion = useCallback((selectedId: string) => {
     setRegionId(selectedId);
-  }, []);
+  }, [setRegionId]);
   const handleSelectMonth = useCallback((year: number, month: number) => {
     setPeriodSelection(`${year}-${String(month).padStart(2, "0")}`);
-  }, []);
+  }, [setPeriodSelection]);
   const dataErrors = [
     regions.error,
     hotspotWindow.error,
@@ -496,29 +506,28 @@ export default function DashboardShell({
         <p className="sidebar-heading">Main features</p>
         <nav className="sidebar-nav" id="dashboard-nav" aria-label="Dashboard sections">
           {dashboardNavItems.map((item) => (
-            <a
-              className="sidebar-nav-link"
+            <Link
+              className={`sidebar-nav-link${activeFeature === item.feature ? " is-active" : ""}`}
               href={item.href}
               key={item.href}
               title={item.label}
-              onClick={() => {
-                setIsSidebarOpen(false);
-                if (item.href === "#assistant-panel-title") {
-                  setIsAssistantOpen(true);
-                  setIsFilterPopoverPinned(false);
-                }
-              }}
+              aria-current={activeFeature === item.feature ? "page" : undefined}
+              onClick={() => setIsSidebarOpen(false)}
             >
               <span className="sidebar-icon">
                 <DashboardIcon name={item.icon} />
               </span>
               <span className="sidebar-label">{item.label}</span>
-            </a>
+            </Link>
           ))}
         </nav>
       </aside>
       <div className="app-content">
-      <main className="dashboard-main dashboard-map-page" id="main-content">
+      <main
+        className={`dashboard-main${activeFeature === "map" ? " dashboard-map-page" : " dashboard-feature-page"}`}
+        id="main-content"
+      >
+        {activeFeature === "map" && (
         <section className="map-workspace" aria-label="Satellite fire map">
           <MapView
             resource={hotspots}
@@ -545,6 +554,9 @@ export default function DashboardShell({
               <span className="map-summary-card-detail">
                 {summaryRegion} · {activityMetricDetail}
               </span>
+              <span className="map-summary-card-disclaimer">
+                Decision Support Intelligence • Non-Predictive Alert
+              </span>
             </article>
             <article className="map-summary-card">
               <p className="map-summary-card-label">
@@ -558,6 +570,9 @@ export default function DashboardShell({
               </strong>
               <span className="map-summary-card-detail">
                 Raw active cell-days
+              </span>
+              <span className="map-summary-card-disclaimer">
+                Decision Support Intelligence • Non-Predictive Alert
               </span>
             </article>
             <article className="map-summary-card">
@@ -573,6 +588,9 @@ export default function DashboardShell({
               <span className="map-summary-card-detail">
                 Raw active cell-days
               </span>
+              <span className="map-summary-card-disclaimer">
+                Decision Support Intelligence • Non-Predictive Alert
+              </span>
             </article>
             <article className="map-summary-card">
               <p className="map-summary-card-label">
@@ -584,8 +602,13 @@ export default function DashboardShell({
               <span className="map-summary-card-detail">
                 Baseline: {baselineDetail}
               </span>
+              <span className="map-summary-card-disclaimer">
+                Decision Support Intelligence • Non-Predictive Alert
+              </span>
             </article>
-            <article className="map-summary-card map-summary-card-anomaly">
+            <article
+              className={`map-summary-card map-summary-card-anomaly map-summary-card-anomaly-${anomalyClass}`}
+            >
               <p className="map-summary-card-label">Anomaly vs. Median</p>
               <strong className="map-summary-card-value">
                 {formatAnomalyPercent(summary, summary.data?.anomalyPercent)}
@@ -594,6 +617,9 @@ export default function DashboardShell({
                 className={`map-summary-status map-summary-status-${anomalyClass}`}
               >
                 {anomalyLabel}
+              </span>
+              <span className="map-summary-card-disclaimer">
+                Decision Support Intelligence • Non-Predictive Alert
               </span>
             </article>
           </section>
@@ -841,7 +867,6 @@ export default function DashboardShell({
             title="Choose region"
             onClick={() => {
               setIsFilterPopoverPinned((isPinned) => !isPinned);
-              setIsAssistantOpen(false);
             }}
           >
             <svg
@@ -857,21 +882,11 @@ export default function DashboardShell({
               <circle cx="12" cy="10" r="2.5" />
             </svg>
           </button>
-          <button
-            type="button"
-            className={`map-assistant-trigger${isAssistantOpen ? " is-open" : ""}`}
-            aria-label={
-              isAssistantOpen
-                ? "Close Gemini AI assistant"
-                : "Open Gemini AI assistant"
-            }
-            aria-controls="assistant-panel"
-            aria-expanded={isAssistantOpen}
+          <Link
+            className="map-assistant-trigger"
+            href="/assistant"
+            aria-label="Open Gemini AI assistant"
             title="Gemini AI assistant"
-            onClick={() => {
-              setIsAssistantOpen((isOpen) => !isOpen);
-              setIsFilterPopoverPinned(false);
-            }}
           >
             <svg
               viewBox="0 0 24 24"
@@ -886,30 +901,126 @@ export default function DashboardShell({
               <path d="M12 20c-1.6 0-2.8-1.2-2.8-2.9 0-1.5 1-2.4 2.5-3.8.5 1.4 1.3 2.1 2.1 2.8.9 1.6.1 3.9-1.8 3.9Z" />
             </svg>
             <span>Gemini AI</span>
-          </button>
-          <div
-            id="assistant-panel"
-            className={`map-assistant-dock${isAssistantOpen ? " is-open" : ""}`}
-            aria-hidden={!isAssistantOpen}
-            inert={!isAssistantOpen}
-          >
-            <AssistantPanel summary={summary.data ?? null} />
-          </div>
+          </Link>
         </section>
+        )}
+        {activeFeature !== "map" && (
+          <section className="dashboard-secondary feature-page">
+            <h1 className="feature-page-title">
+              {dashboardNavItems.find((item) => item.feature === activeFeature)?.label}
+            </h1>
+            <div className="feature-filter-bar" aria-label="Dashboard filters">
+              <div className="filter-field">
+                <label htmlFor="feature-region">Region</label>
+                <select
+                  id="feature-region"
+                  value={regionId}
+                  disabled={regions.isLoading || Boolean(regions.error)}
+                  onChange={(event) => setRegionId(event.target.value)}
+                >
+                  {regions.isLoading && <option value="">Loading regions…</option>}
+                  {regions.error && <option value="">Region catalog unavailable</option>}
+                  {regions.data?.map((region) => (
+                    <option key={region.id} value={region.id}>
+                      {region.name}
+                    </option>
+                  ))}
+                  {customRegion && (
+                    <option value="custom">Custom area · grid-approximated</option>
+                  )}
+                </select>
+              </div>
+              <div className="filter-field">
+                <label htmlFor="feature-period">Month</label>
+                <input
+                  id="feature-period"
+                  type="month"
+                  value={period}
+                  onChange={(event) => setPeriodSelection(event.target.value)}
+                />
+              </div>
+              <div className="filter-field">
+                <label htmlFor="feature-metric">Metric</label>
+                <select
+                  id="feature-metric"
+                  value={metric}
+                  onChange={(event) => {
+                    if (event.target.value === "harmonized") {
+                      setMetric("harmonized");
+                      setInstrument("ALL");
+                    } else if (event.target.value === "raw") {
+                      setMetric("raw");
+                      setInstrument("ALL");
+                    }
+                  }}
+                >
+                  <option value="harmonized">Harmonized</option>
+                  <option value="raw">Raw</option>
+                </select>
+              </div>
+              <div className="filter-field">
+                <label htmlFor="feature-instrument">Sensor</label>
+                <select
+                  id="feature-instrument"
+                  value={instrument}
+                  disabled={metric !== "raw"}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value === "MODIS" || value === "VIIRS" || value === "ALL") {
+                      setInstrument(value);
+                    }
+                  }}
+                >
+                  <option value="ALL">All instruments</option>
+                  <option value="MODIS">MODIS</option>
+                  <option value="VIIRS">VIIRS</option>
+                </select>
+              </div>
+            </div>
+            {activeFeature === "calendar" && (
+              <ActivityCalendar
+                resource={calendar}
+                selectedYear={periodRange?.year ?? null}
+                selectedMonth={periodRange?.month ?? null}
+                onSelectMonth={handleSelectMonth}
+              />
+            )}
+            {activeFeature === "anomaly" && (
+              <div className="analytics-stack">
+                <AnomalyPanel resource={summary} />
+                <HarmonizationPanel resource={harmonization} />
+                <OverlapChart resource={harmonization} />
+              </div>
+            )}
+            {activeFeature === "assistant" && (
+              <AssistantPanel summary={summary.data ?? null} />
+            )}
+            {activeFeature === "export" &&
+              (hotspotFilters ? (
+                <ExportButton filters={hotspotFilters} metric={metric} />
+              ) : (
+                <section
+                  className="export-unavailable-card"
+                  aria-labelledby="export-controls-title"
+                >
+                  <p className="eyebrow">FEATURE 05 · DATA EXPORT</p>
+                  <h2 id="export-controls-title">Export data</h2>
+                  <p>Select a region and period to enable the data exports.</p>
+                </section>
+              ))}
+            <footer className="page-footer">
+              <p>FIRE MEMORY · Historical satellite detections</p>
+              <p>{DATA_ATTRIBUTION}</p>
+              <p>{DATA_LIMITATIONS}</p>
+              <p>{HARMONIZATION_NOTE}</p>
+              {summary.data?.notes[0] && (
+                <p>Selected period: {summary.data.notes[0]}</p>
+              )}
+            </footer>
+          </section>
+        )}
+        {activeFeature === "map" && (
         <div className="dashboard-secondary">
-        <div className="analytics-grid">
-          <ActivityCalendar
-            resource={calendar}
-            selectedYear={periodRange?.year ?? null}
-            selectedMonth={periodRange?.month ?? null}
-            onSelectMonth={handleSelectMonth}
-          />
-          <div className="analytics-stack">
-            <AnomalyPanel resource={summary} />
-            <HarmonizationPanel resource={harmonization} />
-            <OverlapChart resource={harmonization} />
-          </div>
-        </div>
         <section
           className={`data-state-panel${dataErrors.length ? " data-state-error" : ""}`}
           aria-labelledby="data-state-title"
@@ -962,20 +1073,6 @@ export default function DashboardShell({
             )}
           </div>
         </section>
-        {hotspotFilters ? (
-          <ExportButton filters={hotspotFilters} metric={metric} />
-        ) : (
-          <section
-            className="export-unavailable-card"
-            aria-labelledby="export-controls-title"
-          >
-            <p className="eyebrow">FEATURE 05 · DATA EXPORT</p>
-            <h2 id="export-controls-title">
-              CSV export and downloadable reports
-            </h2>
-            <p>Select a region and period to enable the data exports.</p>
-          </section>
-        )}
         <footer className="page-footer">
           <p>FIRE MEMORY · Historical satellite detections</p>
           <p>{DATA_ATTRIBUTION}</p>
@@ -984,6 +1081,7 @@ export default function DashboardShell({
           {summary.data?.notes[0] && <p>Selected period: {summary.data.notes[0]}</p>}
         </footer>
         </div>
+        )}
       </main>
       </div>
     </div>
