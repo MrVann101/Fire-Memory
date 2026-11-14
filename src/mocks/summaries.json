@@ -1,0 +1,125 @@
+{
+  "_simulated": true,
+  "harmonizedWithEstimated": {
+    "region": { "id": "PH-BUK", "name": "Bukidnon", "level": "province" },
+    "period": { "year": 2026, "month": 11 },
+    "metric": "harmonized",
+    "instrument": "ALL",
+    "currentCount": 38,
+    "currentIsEstimated": false,
+    "byInstrument": { "MODIS": 9, "VIIRS": 38 },
+    "baselineYears": [2003, 2004, 2005, 2006, 2008, 2010, 2012, 2014, 2016, 2018, 2020, 2022, 2024, 2025],
+    "estimatedBaselineYears": [2003, 2004, 2005, 2006, 2008, 2010],
+    "historicalMedian": 22,
+    "anomalyPercent": 72.73,
+    "label": "unusually_high",
+    "approximate": false,
+    "notes": [
+      "Selected month (2026-11 UTC) is currently in progress; counts are partial and not scaled.",
+      "Baseline includes 6 MODIS-converted estimated years (2003, 2004, 2005, 2006, 2008, 2010).",
+      "Months grouped in UTC."
+    ],
+    "dataCoverage": { "firstDate": "2003-01-01", "lastDate": "2026-11-14" },
+    "harmonization": {
+      "method": "median ratio of active cell-days",
+      "targetSensor": "VIIRS",
+      "overlapYears": [2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+      "factor": 3.42,
+      "factorScope": "province",
+      "correlation": 0.91,
+      "errorPercent": 12.4,
+      "estimatedYears": [2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011],
+      "notes": ["Pre-2012 counts are MODIS-converted VIIRS equivalents marked estimated."]
+    },
+    "lastUpdated": "2026-11-14T04:30:00.000Z"
+  },
+  "rawSummary": {
+    "region": { "id": "PH-BUK", "name": "Bukidnon", "level": "province" },
+    "period": { "year": 2026, "month": 11 },
+    "metric": "raw",
+    "instrument": "VIIRS",
+    "currentCount": 38,
+    "currentIsEstimated": false,
+    "byInstrument": { "MODIS": 9, "VIIRS": 38 },
+    "baselineYears": [2012, 2014, 2016, 2018, 2020, 2022, 2024, 2025],
+    "estimatedBaselineYears": [],
+    "historicalMedian": 24,
+    "anomalyPercent": 58.33,
+    "label": "unusually_high",
+    "approximate": false,
+    "notes": [
+      "Selected month (2026-11 UTC) is currently in progress; counts are partial and not scaled.",
+      "Raw VIIRS sensor view; pre-2012 MODIS records excluded.",
+      "Months grouped in UTC."
+    ],
+    "dataCoverage": { "firstDate": "2012-02-01", "lastDate": "2026-11-14" },
+    "harmonization": null,
+    "lastUpdated": "2026-11-14T04:30:00.000Z"
+  },
+  "zeroBaseline": {
+    "region": { "id": "PH-BAT", "name": "Batanes", "level": "province" },
+    "period": { "year": 2026, "month": 11 },
+    "metric": "harmonized",
+    "instrument": "ALL",
+    "currentCount": 2,
+    "currentIsEstimated": false,
+    "byInstrument": { "MODIS": 0, "VIIRS": 2 },
+    "baselineYears": [2015, 2018, 2020, 2022, 2024, 2025],
+    "estimatedBaselineYears": [],
+    "historicalMedian": 0,
+    "anomalyPercent": null,
+    "label": "not_calculable",
+    "approximate": false,
+    "notes": [
+      "Historical median is 0; percentage anomaly is undefined (not_calculable).",
+      "Selected month (2026-11 UTC) is currently in progress; counts are partial and not scaled.",
+      "Months grouped in UTC."
+    ],
+    "dataCoverage": { "firstDate": "2015-01-01", "lastDate": "2026-11-14" },
+    "harmonization": {
+      "method": "median ratio of active cell-days",
+      "targetSensor": "VIIRS",
+      "overlapYears": [2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+      "factor": 3.15,
+      "factorScope": "national",
+      "correlation": 0.88,
+      "errorPercent": 15.2,
+      "estimatedYears": [2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011],
+      "notes": ["Insufficient province overlap; fallback to national harmonization factor."]
+    },
+    "lastUpdated": "2026-11-14T04:30:00.000Z"
+  },
+  "customArea": {
+    "region": { "id": "custom", "name": "Custom Area (124.90, 7.80 to 125.25, 8.20)", "level": "custom" },
+    "period": { "year": 2026, "month": 11 },
+    "metric": "harmonized",
+    "instrument": "ALL",
+    "currentCount": 14,
+    "currentIsEstimated": false,
+    "byInstrument": { "MODIS": 4, "VIIRS": 14 },
+    "baselineYears": [2005, 2008, 2012, 2016, 2020, 2024, 2025],
+    "estimatedBaselineYears": [2005, 2008],
+    "historicalMedian": 12,
+    "anomalyPercent": 16.67,
+    "label": "above_baseline",
+    "approximate": true,
+    "notes": [
+      "Grid-approximated: computed from 0.1-degree grid cells intersecting the selected bounding box using national harmonization factor.",
+      "Selected month (2026-11 UTC) is currently in progress; counts are partial and not scaled.",
+      "Months grouped in UTC."
+    ],
+    "dataCoverage": { "firstDate": "2005-01-01", "lastDate": "2026-11-14" },
+    "harmonization": {
+      "method": "median ratio of active cell-days",
+      "targetSensor": "VIIRS",
+      "overlapYears": [2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025],
+      "factor": 3.15,
+      "factorScope": "national",
+      "correlation": 0.88,
+      "errorPercent": 15.2,
+      "estimatedYears": [2003, 2004, 2005, 2006, 2007, 2008, 2009, 2010, 2011],
+      "notes": ["National harmonization factor applied for custom bounding box."]
+    },
+    "lastUpdated": "2026-11-14T04:30:00.000Z"
+  }
+}

@@ -260,18 +260,18 @@ contract fields are present.
 
 ## 9. Handoff checklist
 
-- [ ] Migration creates all six required tables and uniqueness constraints.
-- [ ] Indexes cover region, period, instrument, and raw acquisition queries.
-- [ ] `listRegions` and `queryHotspots` match exact signatures.
-- [ ] Hotspot responses include limit, truncation, raw window, and timestamp.
-- [ ] Median is same-month, complete-past-years only, and computed in SQL.
-- [ ] Current incomplete month has a note and is not scaled.
-- [ ] Zero/missing median returns `not_calculable` and null anomaly.
-- [ ] Estimated years and harmonization metadata are returned.
-- [ ] Raw versus harmonized metric semantics are tested.
-- [ ] Children and harmonization routes match contract.
-- [ ] Custom bbox validates and returns `approximate=true`.
-- [ ] Curl smoke tests and unit tests pass without secrets in output.
+- [x] Migration creates all six required tables and uniqueness constraints.
+- [x] Indexes cover region, period, instrument, and raw acquisition queries.
+- [x] `listRegions` and `queryHotspots` match exact signatures.
+- [x] Hotspot responses include limit, truncation, raw window, and timestamp.
+- [x] Median is same-month, complete-past-years only, and computed in SQL.
+- [x] Current incomplete month has a note and is not scaled.
+- [x] Zero/missing median returns `not_calculable` and null anomaly.
+- [x] Estimated years and harmonization metadata are returned.
+- [x] Raw versus harmonized metric semantics are tested.
+- [x] Children and harmonization routes match contract.
+- [x] Custom bbox validates and returns `approximate=true`.
+- [x] Curl smoke tests and unit tests pass without secrets in output.
 
 ## 10. If you are blocked
 
