@@ -28,7 +28,7 @@ CREATE INDEX IF NOT EXISTS idx_regions_parent_id ON regions(parent_id);
 -- Recent raw window only (last 12-24 months) for map markers and raw CSV
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS hotspots (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     source_id TEXT,
     source_key TEXT, -- deduplication key to guarantee idempotent ingestion
     latitude DOUBLE PRECISION NOT NULL,
@@ -54,7 +54,7 @@ CREATE INDEX IF NOT EXISTS idx_hotspots_lat_lon ON hotspots(latitude, longitude)
 -- Full historical raw counts & active cell-days per province/country/month
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS monthly_counts (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     region_id TEXT NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
     year INTEGER NOT NULL,
     month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
@@ -74,7 +74,7 @@ CREATE INDEX IF NOT EXISTS idx_monthly_counts_month ON monthly_counts(month);
 -- Full historical harmonized series (VIIRS-equivalent target)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS monthly_harmonized (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     region_id TEXT NOT NULL REFERENCES regions(id) ON DELETE CASCADE,
     year INTEGER NOT NULL,
     month INTEGER NOT NULL CHECK (month BETWEEN 1 AND 12),
@@ -93,7 +93,7 @@ CREATE INDEX IF NOT EXISTS idx_monthly_harmonized_month ON monthly_harmonized(mo
 -- 0.1 degree coarse grid counts for custom area draw (approximate aggregation)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS monthly_grid_counts (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     cell_id TEXT NOT NULL,
     cell_lat DOUBLE PRECISION NOT NULL,
     cell_lon DOUBLE PRECISION NOT NULL,
@@ -114,7 +114,7 @@ CREATE INDEX IF NOT EXISTS idx_monthly_grid_coords ON monthly_grid_counts(cell_l
 -- Conversion parameters and validation stats (region_id IS NULL for national)
 -- ============================================================================
 CREATE TABLE IF NOT EXISTS harmonization_factors (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     region_id TEXT REFERENCES regions(id) ON DELETE CASCADE,
     factor DOUBLE PRECISION NOT NULL,
     method TEXT NOT NULL,
