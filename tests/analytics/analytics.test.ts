@@ -1,6 +1,10 @@
 import { describe, it, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
-import { listRegions } from "@/lib/db/regions";
+import {
+  COUNTRY_GEOBOUNDARIES_ID,
+  listRegions,
+  requireRegionWithDbId,
+} from "@/lib/db/regions";
 import {
   queryHotspots,
   sampleDeterministicallyAcrossTime,
@@ -107,6 +111,30 @@ describe("Backend Contracts, Sampling, and Mock Integration", () => {
     });
     assert.equal(custom.approximate, true);
     assert.equal(custom.region.level, "custom");
+
+    // Custom bbox and zero-baseline with metric=raw set harmonization = null
+    const customRaw = await getAnalyticsSummary({
+      regionId: "custom",
+      bbox: [124.9, 7.8, 125.25, 8.2],
+      year: 2026,
+      month: 11,
+      metric: "raw",
+      instrument: "VIIRS",
+    });
+    assert.equal(customRaw.metric, "raw");
+    assert.equal(customRaw.instrument, "VIIRS");
+    assert.equal(customRaw.harmonization, null);
+
+    const zeroBaseRaw = await getAnalyticsSummary({
+      regionId: "PH-BAT",
+      year: 2026,
+      month: 11,
+      metric: "raw",
+      instrument: "VIIRS",
+    });
+    assert.equal(zeroBaseRaw.metric, "raw");
+    assert.equal(zeroBaseRaw.instrument, "VIIRS");
+    assert.equal(zeroBaseRaw.harmonization, null);
   });
 
   it("returns calendar with null and estimated cells, children counts, and harmonization overlap", async () => {
@@ -123,9 +151,52 @@ describe("Backend Contracts, Sampling, and Mock Integration", () => {
     const provChildren = await getChildCounts("PH-BUK", 2026, 11, "harmonized");
     assert.deepEqual(provChildren, []);
 
+    const customChildren = await getChildCounts("custom", 2026, 11, "harmonized");
+    assert.deepEqual(customChildren, []);
+
     const harm = await getHarmonization("PH-BUK");
     assert.equal(harm.regionId, "PH-BUK");
     assert.ok(harm.overlap.length > 0);
+  });
+
+  it("resolves GeoBoundaries ADM0/ADM2 IDs and short region codes interchangeably", async () => {
+    const countryViaGeo = await requireRegionWithDbId(COUNTRY_GEOBOUNDARIES_ID);
+    assert.equal(countryViaGeo.region.id, "PH");
+    assert.equal(countryViaGeo.region.level, "country");
+
+    const bukViaGeo = await requireRegionWithDbId(
+      "PHL-ADM2-2640588B97736443103823"
+    );
+    assert.equal(bukViaGeo.region.name, "Bukidnon");
+
+    const admRegionViaGeo = await requireRegionWithDbId(
+      "PHL-ADM2-2640588B65314213268917"
+    );
+    assert.equal(admRegionViaGeo.region.level, "region");
+
+    const summaryViaGeo = await getAnalyticsSummary({
+      regionId: "PHL-ADM2-2640588B97736443103823",
+      year: 2026,
+      month: 11,
+      metric: "harmonized",
+    });
+    assert.equal(summaryViaGeo.region.name, "Bukidnon");
+
+    const batViaGeo = await getAnalyticsSummary({
+      regionId: "PHL-ADM2-2640588B23864872837062",
+      year: 2026,
+      month: 11,
+      metric: "harmonized",
+    });
+    assert.equal(batViaGeo.label, "not_calculable");
+
+    const childrenViaGeo = await getChildCounts(
+      COUNTRY_GEOBOUNDARIES_ID,
+      2026,
+      11,
+      "harmonized"
+    );
+    assert.ok(childrenViaGeo.length > 0);
   });
 
   it("fails explicitly with DatabaseProviderError when mocks are off and DB credentials are missing", async () => {

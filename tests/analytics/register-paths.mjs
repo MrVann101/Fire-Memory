@@ -1,9 +1,17 @@
 import { registerHooks } from "node:module";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { dirname, resolve } from "node:path";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
+
+function isExistingFile(candidatePath) {
+  try {
+    return existsSync(candidatePath) && statSync(candidatePath).isFile();
+  } catch {
+    return false;
+  }
+}
 
 function resolveFileCandidate(basePath) {
   const candidates = [
@@ -15,7 +23,7 @@ function resolveFileCandidate(basePath) {
     resolve(basePath, "index.ts"),
   ];
   for (const c of candidates) {
-    if (existsSync(c)) {
+    if (isExistingFile(c)) {
       return c;
     }
   }
@@ -38,13 +46,16 @@ registerHooks({
 
     if (
       (specifier.startsWith("./") || specifier.startsWith("../")) &&
-      context.parentURL
+      context.parentURL &&
+      context.parentURL.startsWith("file:")
     ) {
       const parentPath = fileURLToPath(context.parentURL);
-      const target = resolve(dirname(parentPath), specifier);
-      const resolved = resolveFileCandidate(target);
-      if (resolved) {
-        return { url: pathToFileURL(resolved).href, shortCircuit: true };
+      if (!parentPath.includes("node_modules")) {
+        const target = resolve(dirname(parentPath), specifier);
+        const resolved = resolveFileCandidate(target);
+        if (resolved) {
+          return { url: pathToFileURL(resolved).href, shortCircuit: true };
+        }
       }
     }
 
@@ -52,14 +63,16 @@ registerHooks({
   },
 
   load(url, context, nextLoad) {
-    if (url.endsWith(".json")) {
+    if (url.startsWith("file:") && url.endsWith(".json")) {
       const filePath = fileURLToPath(url);
-      const raw = readFileSync(filePath, "utf8");
-      return {
-        format: "module",
-        source: `export default ${raw};`,
-        shortCircuit: true,
-      };
+      if (!filePath.includes("node_modules")) {
+        const raw = readFileSync(filePath, "utf8");
+        return {
+          format: "module",
+          source: `export default ${raw};`,
+          shortCircuit: true,
+        };
+      }
     }
     return nextLoad(url, context);
   },

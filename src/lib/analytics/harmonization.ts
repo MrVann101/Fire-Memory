@@ -4,7 +4,7 @@ import type {
   OverlapPoint,
 } from "@/contracts/types";
 import harmonizationMock from "@/mocks/harmonization.json";
-import { requireRegion } from "@/lib/db/regions";
+import { requireRegionWithDbId } from "@/lib/db/regions";
 import {
   DatabaseProviderError,
   getSupabaseServerClient,
@@ -14,6 +14,7 @@ import { roundToTwoDecimals } from "./labels";
 
 interface FactorRow {
   region_id: string | null;
+  scope?: string | null;
   factor: number;
   method: string;
   overlap_years: number[];
@@ -21,10 +22,12 @@ interface FactorRow {
   correlation: number | null;
   error_percent: number | null;
   estimated_years: number[];
+  fallback_reason?: string | null;
   notes: string[];
 }
 
 interface MonthlyOverlapRow {
+  region_id?: string;
   year: number;
   month: number;
   instrument: "MODIS" | "VIIRS";
@@ -36,6 +39,9 @@ export async function getHarmonizationInfoForRegion(
   regionId: string
 ): Promise<HarmonizationInfo | null> {
   if (isMocksEnabled()) {
+    if (regionId !== "custom") {
+      await requireRegionWithDbId(regionId);
+    }
     return harmonizationMock.harmonization.info as HarmonizationInfo;
   }
 
@@ -45,10 +51,8 @@ export async function getHarmonizationInfoForRegion(
   if (regionId === "custom") {
     scopeRegionId = null;
   } else {
-    const region = await requireRegion(regionId);
-    if (region.level === "country") {
-      scopeRegionId = null;
-    }
+    const { region, dbId } = await requireRegionWithDbId(regionId);
+    scopeRegionId = region.level === "country" ? null : dbId;
   }
 
   let factorRow: FactorRow | null = null;
@@ -58,7 +62,7 @@ export async function getHarmonizationInfoForRegion(
     const { data: provData, error: provError } = await supabase
       .from("harmonization_factors")
       .select(
-        "region_id, factor, method, overlap_years, n_months, correlation, error_percent, estimated_years, notes"
+        "region_id, scope, factor, method, overlap_years, n_months, correlation, error_percent, estimated_years, fallback_reason, notes"
       )
       .eq("region_id", scopeRegionId)
       .maybeSingle();
@@ -70,7 +74,7 @@ export async function getHarmonizationInfoForRegion(
     }
     if (provData) {
       factorRow = provData as FactorRow;
-      factorScope = "province";
+      factorScope = factorRow.scope === "national" ? "national" : "province";
     }
   }
 
@@ -78,9 +82,11 @@ export async function getHarmonizationInfoForRegion(
     const { data: natData, error: natError } = await supabase
       .from("harmonization_factors")
       .select(
-        "region_id, factor, method, overlap_years, n_months, correlation, error_percent, estimated_years, notes"
+        "region_id, scope, factor, method, overlap_years, n_months, correlation, error_percent, estimated_years, fallback_reason, notes"
       )
       .is("region_id", null)
+      .order("computed_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
 
     if (natError) {
@@ -122,20 +128,23 @@ export async function getHarmonization(
   regionId: string
 ): Promise<HarmonizationResponse> {
   if (isMocksEnabled()) {
+    const resolved =
+      regionId === "custom" ? null : await requireRegionWithDbId(regionId);
     const mock = harmonizationMock.harmonization as HarmonizationResponse;
     return {
       ...mock,
-      regionId,
+      regionId: resolved ? resolved.region.id : regionId,
     };
   }
 
-  const region =
-    regionId === "custom" ? null : await requireRegion(regionId);
+  const resolved =
+    regionId === "custom" ? null : await requireRegionWithDbId(regionId);
+  const canonicalRegionId = resolved ? resolved.region.id : regionId;
   const info = await getHarmonizationInfoForRegion(regionId);
 
   if (!info) {
     return {
-      regionId,
+      regionId: canonicalRegionId,
       info: {
         method: "median ratio of active cell-days",
         targetSensor: "VIIRS",
@@ -153,7 +162,7 @@ export async function getHarmonization(
 
   if (regionId === "custom" || info.overlapYears.length === 0) {
     return {
-      regionId,
+      regionId: canonicalRegionId,
       info,
       overlap: [],
     };
@@ -163,7 +172,7 @@ export async function getHarmonization(
   const { data, error } = await supabase
     .from("monthly_counts")
     .select("year, month, instrument, active_cell_days, has_coverage")
-    .eq("region_id", region ? region.id : regionId)
+    .eq("region_id", resolved ? resolved.dbId : regionId)
     .in("year", info.overlapYears)
     .eq("has_coverage", true)
     .order("year", { ascending: true })
@@ -175,7 +184,26 @@ export async function getHarmonization(
     );
   }
 
-  const rows = (data ?? []) as MonthlyOverlapRow[];
+  let rows = (data ?? []) as MonthlyOverlapRow[];
+
+  if (rows.length === 0 && resolved?.region.level === "country") {
+    const { data: natData, error: natError } = await supabase.rpc(
+      "get_national_overlap",
+      { p_overlap_years: info.overlapYears }
+    );
+    if (natError) {
+      throw new DatabaseProviderError(
+        "Failed to retrieve national overlap series for harmonization."
+      );
+    }
+    rows = ((natData ?? []) as Array<{
+      year: number;
+      month: number;
+      instrument: "MODIS" | "VIIRS";
+      active_cell_days: number;
+    }>).map((r) => ({ ...r, has_coverage: true }));
+  }
+
   const byPeriod = new Map<string, OverlapPoint>();
 
   for (const row of rows) {
@@ -193,13 +221,13 @@ export async function getHarmonization(
     }
 
     if (row.instrument === "MODIS") {
-      point.modis = row.active_cell_days;
+      point.modis = (point.modis ?? 0) + row.active_cell_days;
       point.modisScaled =
         info.factor !== null
-          ? roundToTwoDecimals(row.active_cell_days * info.factor)
+          ? roundToTwoDecimals(point.modis * info.factor)
           : null;
     } else if (row.instrument === "VIIRS") {
-      point.viirs = row.active_cell_days;
+      point.viirs = (point.viirs ?? 0) + row.active_cell_days;
     }
   }
 
@@ -208,7 +236,7 @@ export async function getHarmonization(
   );
 
   return {
-    regionId,
+    regionId: canonicalRegionId,
     info,
     overlap,
   };

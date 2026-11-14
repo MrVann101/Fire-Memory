@@ -55,20 +55,34 @@ export function parseBBoxParam(rawBBox: string | null): BBox | undefined {
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
+function isValidIsoCalendarDate(value: string): boolean {
+  if (!isoDateRegex.test(value)) {
+    return false;
+  }
+  const d = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === value;
+}
+
+const RegionIdSchema = z
+  .string()
+  .trim()
+  .min(1, "regionId is required")
+  .max(128, "regionId must be at most 128 characters");
+
 const HotspotQuerySchema = z
   .object({
-    regionId: z.string().trim().min(1, "regionId is required"),
+    regionId: RegionIdSchema,
     bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
     start: z
       .string()
       .regex(isoDateRegex, "start must be YYYY-MM-DD (UTC)")
-      .refine((v) => !Number.isNaN(Date.parse(`${v}T00:00:00.000Z`)), {
+      .refine(isValidIsoCalendarDate, {
         message: "start is not a valid calendar date",
       }),
     end: z
       .string()
       .regex(isoDateRegex, "end must be YYYY-MM-DD (UTC)")
-      .refine((v) => !Number.isNaN(Date.parse(`${v}T23:59:59.999Z`)), {
+      .refine(isValidIsoCalendarDate, {
         message: "end is not a valid calendar date",
       }),
     instrument: z.enum(["MODIS", "VIIRS", "ALL"]).default("ALL"),
@@ -96,7 +110,7 @@ const InstrumentFilterSchema = z.enum(["MODIS", "VIIRS", "ALL"]).default("ALL");
 
 const SummaryQuerySchema = z
   .object({
-    regionId: z.string().trim().min(1, "regionId is required"),
+    regionId: RegionIdSchema,
     bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
     year: z.coerce.number().int().min(2000).max(2100),
     month: z.coerce.number().int().min(1).max(12),
@@ -115,7 +129,7 @@ const SummaryQuerySchema = z
 
 const CalendarQuerySchema = z
   .object({
-    regionId: z.string().trim().min(1, "regionId is required"),
+    regionId: RegionIdSchema,
     bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
     metric: MetricSchema,
     instrument: InstrumentFilterSchema,
@@ -131,14 +145,14 @@ const CalendarQuerySchema = z
   });
 
 const ChildrenQuerySchema = z.object({
-  regionId: z.string().trim().min(1, "regionId is required"),
+  regionId: RegionIdSchema,
   year: z.coerce.number().int().min(2000).max(2100),
   month: z.coerce.number().int().min(1).max(12),
   metric: MetricSchema,
 });
 
 const HarmonizationQuerySchema = z.object({
-  regionId: z.string().trim().min(1, "regionId is required"),
+  regionId: RegionIdSchema,
 });
 
 export function validateHotspotSearchParams(searchParams: URLSearchParams): {
@@ -265,6 +279,8 @@ export function errorToHttpResponse(
   error: unknown,
   context: { route: string; regionId?: string | null }
 ): NextResponse {
+  const headers = { "Cache-Control": "no-store" };
+
   if (error instanceof AppValidationError) {
     return NextResponse.json(
       {
@@ -275,7 +291,7 @@ export function errorToHttpResponse(
           context,
         },
       },
-      { status: 400 }
+      { status: 400, headers }
     );
   }
 
@@ -288,7 +304,7 @@ export function errorToHttpResponse(
           context,
         },
       },
-      { status: 404 }
+      { status: 404, headers }
     );
   }
 
@@ -301,7 +317,7 @@ export function errorToHttpResponse(
           context,
         },
       },
-      { status: 500 }
+      { status: 500, headers }
     );
   }
 
@@ -314,6 +330,6 @@ export function errorToHttpResponse(
         context,
       },
     },
-    { status: 500 }
+    { status: 500, headers }
   );
 }

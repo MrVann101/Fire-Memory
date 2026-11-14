@@ -6,7 +6,7 @@ import type {
   Instrument,
 } from "@/contracts/types";
 import hotspotsMock from "@/mocks/hotspots.json";
-import { getChildProvinces, requireRegion } from "./regions";
+import { requireRegion, requireRegionWithDbId } from "./regions";
 import {
   DatabaseProviderError,
   getSupabaseServerClient,
@@ -165,9 +165,9 @@ export async function queryHotspots(
   }
 
   let bboxFilter: BBox | undefined;
-  let countryChildIds: string[] = [];
-  let isCountry = false;
+  let targetDbId: string | undefined;
   let isProvince = false;
+  let isAdmRegion = false;
 
   if (filters.regionId === "custom") {
     if (!filters.bbox) {
@@ -177,15 +177,15 @@ export async function queryHotspots(
     }
     bboxFilter = filters.bbox;
   } else {
-    const region = await requireRegion(filters.regionId);
+    const resolved = await requireRegionWithDbId(filters.regionId);
+    const { region, dbId } = resolved;
+    targetDbId = dbId;
     if (region.level === "country") {
-      isCountry = true;
       bboxFilter = region.bbox;
-      const children = await getChildProvinces(region.id);
-      countryChildIds = children.map((c) => c.id);
     } else if (region.level === "province") {
       isProvince = true;
     } else {
+      isAdmRegion = true;
       bboxFilter = region.bbox;
     }
   }
@@ -205,22 +205,14 @@ export async function queryHotspots(
       query = query.eq("instrument", instrument);
     }
 
-    if (isProvince) {
-      query = query.eq("province_id", filters.regionId);
-    } else if (isCountry && bboxFilter) {
+    if (isProvince && targetDbId) {
+      query = query.eq("province_id", targetDbId);
+    } else if (isAdmRegion && targetDbId && bboxFilter) {
       const [minLon, minLat, maxLon, maxLat] = bboxFilter;
-      if (countryChildIds.length > 0) {
-        const idList = countryChildIds.map((id) => `"${id}"`).join(",");
-        query = query.or(
-          `province_id.in.(${idList}),and(province_id.is.null,longitude.gte.${minLon},longitude.lte.${maxLon},latitude.gte.${minLat},latitude.lte.${maxLat})`
-        );
-      } else {
-        query = query
-          .gte("longitude", minLon)
-          .lte("longitude", maxLon)
-          .gte("latitude", minLat)
-          .lte("latitude", maxLat);
-      }
+      const safeId = targetDbId.replace(/"/g, "");
+      query = query.or(
+        `province_id.eq."${safeId}",and(longitude.gte.${minLon},longitude.lte.${maxLon},latitude.gte.${minLat},latitude.lte.${maxLat})`
+      );
     } else if (bboxFilter) {
       const [minLon, minLat, maxLon, maxLat] = bboxFilter;
       query = query
@@ -333,9 +325,25 @@ export async function queryHotspots(
     const perBucket = Math.ceil(effectiveLimit / buckets);
     const bucketSpan = total / buckets;
 
-    const slicePromises = Array.from({ length: buckets }, async (_, b) => {
-      const startIdx = Math.floor(b * bucketSpan);
-      const endIdx = Math.min(total - 1, startIdx + perBucket - 1);
+    const sliceRanges: Array<{ startIdx: number; endIdx: number }> = [];
+    let nextMinStart = 0;
+    for (let b = 0; b < buckets; b++) {
+      const startIdx = Math.max(nextMinStart, Math.floor(b * bucketSpan));
+      if (startIdx >= total) {
+        break;
+      }
+      const nextBucketStart =
+        b + 1 < buckets ? Math.floor((b + 1) * bucketSpan) : total;
+      const endIdx = Math.min(
+        total - 1,
+        Math.max(startIdx, nextBucketStart - 1),
+        startIdx + perBucket - 1
+      );
+      sliceRanges.push({ startIdx, endIdx });
+      nextMinStart = endIdx + 1;
+    }
+
+    const slicePromises = sliceRanges.map(async ({ startIdx, endIdx }) => {
       const q = applyFilters(
         supabase
           .from("hotspots")
@@ -356,7 +364,14 @@ export async function queryHotspots(
     });
 
     const sliceResults = await Promise.all(slicePromises);
-    const combined = sliceResults.flat();
+    const seenIds = new Set<string>();
+    const combined: HotspotRow[] = [];
+    for (const row of sliceResults.flat()) {
+      if (!seenIds.has(row.id)) {
+        seenIds.add(row.id);
+        combined.push(row);
+      }
+    }
     rows = sampleDeterministicallyAcrossTime(combined, effectiveLimit);
   }
 

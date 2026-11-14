@@ -5,7 +5,7 @@ import type {
   Instrument,
 } from "@/contracts/types";
 import calendarMock from "@/mocks/calendar.json";
-import { requireRegion } from "@/lib/db/regions";
+import { requireRegionWithDbId } from "@/lib/db/regions";
 import {
   DatabaseProviderError,
   getSupabaseServerClient,
@@ -44,10 +44,14 @@ export async function getCalendar(
     query.metric === "harmonized" ? "ALL" : (query.instrument ?? "ALL");
 
   if (isMocksEnabled()) {
+    const resolved =
+      query.regionId === "custom"
+        ? null
+        : await requireRegionWithDbId(query.regionId);
     const base = calendarMock.calendar as CalendarResponse;
     return {
       ...base,
-      regionId: query.regionId,
+      regionId: resolved ? resolved.region.id : query.regionId,
       metric: query.metric,
       instrument: effectiveInstrument,
       approximate: query.regionId === "custom",
@@ -74,9 +78,14 @@ export async function getCalendar(
       query.metric === "harmonized" &&
       (!harmonization || harmonization.factor === null)
     ) {
-      throw new DatabaseProviderError(
-        "National harmonization factor is missing; cannot compute custom area calendar."
-      );
+      return {
+        regionId: "custom",
+        metric: query.metric,
+        instrument: effectiveInstrument,
+        approximate: true,
+        cells: [],
+        harmonization,
+      };
     }
 
     const { data, error } = await supabase.rpc("get_custom_bbox_calendar", {
@@ -112,14 +121,14 @@ export async function getCalendar(
     };
   }
 
-  const region = await requireRegion(query.regionId);
+  const { region, dbId } = await requireRegionWithDbId(query.regionId);
 
   if (query.metric === "harmonized") {
     const [{ data, error }, harmonization] = await Promise.all([
       supabase
         .from("monthly_harmonized")
         .select("year, month, harmonized_count, is_estimated")
-        .eq("region_id", region.id)
+        .eq("region_id", dbId)
         .order("year", { ascending: true })
         .order("month", { ascending: true }),
       getHarmonizationInfoForRegion(region.id),
@@ -131,17 +140,84 @@ export async function getCalendar(
       );
     }
 
-    const cells: CalendarCell[] = ((data ?? []) as HarmonizedCalendarRow[]).map(
-      (row) => ({
-        year: row.year,
-        month: row.month,
-        count:
-          row.harmonized_count !== null
-            ? roundToTwoDecimals(row.harmonized_count)
-            : null,
-        estimated: row.harmonized_count !== null ? row.is_estimated : false,
-      })
-    );
+    const directRows = (data ?? []) as HarmonizedCalendarRow[];
+
+    if (directRows.length === 0 && region.level === "country") {
+      const { data: natData, error: natError } = await supabase.rpc(
+        "get_national_calendar",
+        {
+          p_metric: "harmonized",
+          p_instrument: "ALL",
+        }
+      );
+      if (natError) {
+        throw new DatabaseProviderError(
+          "Failed to load national harmonized calendar data."
+        );
+      }
+      const cells: CalendarCell[] = ((natData ?? []) as GridCalendarRow[]).map(
+        (r) => ({
+          year: r.year,
+          month: r.month,
+          count: r.count !== null ? roundToTwoDecimals(r.count) : null,
+          estimated: r.estimated,
+        })
+      );
+      return {
+        regionId: region.id,
+        metric: "harmonized",
+        instrument: "ALL",
+        approximate: false,
+        cells,
+        harmonization,
+      };
+    }
+
+    if (directRows.length === 0 && region.level === "region") {
+      const { data: bboxData, error: bboxError } = await supabase.rpc(
+        "get_custom_bbox_calendar",
+        {
+          p_min_lon: region.bbox[0],
+          p_min_lat: region.bbox[1],
+          p_max_lon: region.bbox[2],
+          p_max_lat: region.bbox[3],
+          p_metric: "harmonized",
+          p_instrument: "ALL",
+          p_national_factor: harmonization?.factor ?? null,
+        }
+      );
+      if (bboxError) {
+        throw new DatabaseProviderError(
+          "Failed to load regional bounding-box harmonized calendar data."
+        );
+      }
+      const cells: CalendarCell[] = ((bboxData ?? []) as GridCalendarRow[]).map(
+        (r) => ({
+          year: r.year,
+          month: r.month,
+          count: r.count !== null ? roundToTwoDecimals(r.count) : null,
+          estimated: r.estimated,
+        })
+      );
+      return {
+        regionId: region.id,
+        metric: "harmonized",
+        instrument: "ALL",
+        approximate: true,
+        cells,
+        harmonization,
+      };
+    }
+
+    const cells: CalendarCell[] = directRows.map((row) => ({
+      year: row.year,
+      month: row.month,
+      count:
+        row.harmonized_count !== null
+          ? roundToTwoDecimals(row.harmonized_count)
+          : null,
+      estimated: row.harmonized_count !== null ? row.is_estimated : false,
+    }));
 
     return {
       regionId: region.id,
@@ -157,7 +233,7 @@ export async function getCalendar(
   let q = supabase
     .from("monthly_counts")
     .select("year, month, instrument, raw_count, has_coverage")
-    .eq("region_id", region.id)
+    .eq("region_id", dbId)
     .order("year", { ascending: true })
     .order("month", { ascending: true });
 
@@ -171,6 +247,74 @@ export async function getCalendar(
   }
 
   const rows = (data ?? []) as RawCalendarRow[];
+
+  if (rows.length === 0 && region.level === "country") {
+    const { data: natData, error: natError } = await supabase.rpc(
+      "get_national_calendar",
+      {
+        p_metric: "raw",
+        p_instrument: effectiveInstrument,
+      }
+    );
+    if (natError) {
+      throw new DatabaseProviderError(
+        "Failed to load national raw calendar data."
+      );
+    }
+    const cells: CalendarCell[] = ((natData ?? []) as GridCalendarRow[]).map(
+      (r) => ({
+        year: r.year,
+        month: r.month,
+        count: r.count !== null ? roundToTwoDecimals(r.count) : null,
+        estimated: false,
+      })
+    );
+    return {
+      regionId: region.id,
+      metric: "raw",
+      instrument: effectiveInstrument,
+      approximate: false,
+      cells,
+      harmonization: null,
+    };
+  }
+
+  if (rows.length === 0 && region.level === "region") {
+    const { data: bboxData, error: bboxError } = await supabase.rpc(
+      "get_custom_bbox_calendar",
+      {
+        p_min_lon: region.bbox[0],
+        p_min_lat: region.bbox[1],
+        p_max_lon: region.bbox[2],
+        p_max_lat: region.bbox[3],
+        p_metric: "raw",
+        p_instrument: effectiveInstrument,
+        p_national_factor: null,
+      }
+    );
+    if (bboxError) {
+      throw new DatabaseProviderError(
+        "Failed to load regional bounding-box raw calendar data."
+      );
+    }
+    const cells: CalendarCell[] = ((bboxData ?? []) as GridCalendarRow[]).map(
+      (r) => ({
+        year: r.year,
+        month: r.month,
+        count: r.count !== null ? roundToTwoDecimals(r.count) : null,
+        estimated: false,
+      })
+    );
+    return {
+      regionId: region.id,
+      metric: "raw",
+      instrument: effectiveInstrument,
+      approximate: true,
+      cells,
+      harmonization: null,
+    };
+  }
+
   const byPeriod = new Map<
     string,
     { year: number; month: number; sum: number; anyCoverage: boolean }
