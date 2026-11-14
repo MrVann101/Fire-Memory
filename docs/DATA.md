@@ -168,9 +168,10 @@ source row, and writes deterministic JSONL in batches plus a count report.
 The chosen window is 2024-01-01 through 2025-12-31, the two latest calendar
 years represented in the supplied downloads. This is a local fallback, not
 a current FIRMS window: the files contain no 2026 detections and end on
-2025-12-31. The Member 2 schema migration is present, but
-`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` were absent from the process
-environment during the latest check, so no Supabase rows were inserted.
+2025-12-31. The Member 2 schema migration is present. `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` are present in the ignored `.env.local`; a
+standalone Node command must load that file (for example with
+`--env-file=.env.local`). No raw-window rows have been inserted.
 
 Compile and run from the repository root in PowerShell:
 
@@ -215,8 +216,10 @@ local `monthly-counts.json`, `monthly-grid-counts.json`, and
 `aggregate-report.json` files under the ignored `data/processed/` directory.
 The aggregate covers all supplied detections from 2020 through 2025; it is
 not the complete FIRMS history and does not reach the early 2000s. No
-database rows were inserted because Supabase credentials were not present in
-the process environment. The schema migration is available in the repository.
+monthly rows were inserted. The latest read-only Supabase check found
+`monthly_counts=0` and `monthly_grid_counts=0`; loading is paused until the
+existing country row is reconciled with the UI's `PH` country ID. The schema
+migration is available in the repository.
 
 Province `raw_count` is the count of unique normalized detections.
 `active_cell_days` counts distinct UTC date / 0.01-degree cell combinations
@@ -339,8 +342,16 @@ The dry run validated 88 regions, 82 factors, 6,870 monthly-count rows,
 4,084 harmonized rows, 48,321 grid rows, and 63,386 raw-window records. It
 does not report database inserts or updates. A live write requires the
 explicit `--apply` flag plus `SUPABASE_URL` and
-`SUPABASE_SERVICE_ROLE_KEY` in the process environment; no credential values
-are written or printed. The database is **not loaded** as of this check.
+`SUPABASE_SERVICE_ROLE_KEY` in the process environment (the ignored
+`.env.local` can be loaded with Node's `--env-file` option); no credential
+values are written or printed.
+
+A read-only database check on 2026-11-14 found 88 regions and one
+harmonization factor, with zero rows in `monthly_counts`,
+`monthly_harmonized`, `monthly_grid_counts`, and `hotspots`. The existing
+country row does not use `PH`, and all 87 ADM2 rows reference that legacy
+country ID. Running the loader without reconciling it would add a second
+country row; no live seed has been attempted.
 
 ## Administrative boundaries
 

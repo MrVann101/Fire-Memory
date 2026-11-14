@@ -1,6 +1,6 @@
 # Member 1 Actionable Task Plan — Data & FIRMS (Second Implementation)
 
-> **Source of truth:** Local source files, generated artifacts, ingestion code and tests, project plans, and the checked-in Supabase schema migration. Live database state has not been verified.
+> **Source of truth:** Local source files, generated artifacts, ingestion code and tests, project plans, checked-in Supabase schema migration, and a read-only live database check on 2026-11-14. No database writes were made.
 
 ---
 
@@ -12,9 +12,9 @@
 | Normalization & Deduplication | `[x]` Done locally | `scripts/ingest/normalize.ts` & `scripts/ingest/ingest.ts` run locally (`sink: "local-jsonl"`). `normalize.test.ts` passes. |
 | Aggregation & Harmonization | `[x]` Provisional | `scripts/ingest/aggregate.ts` & `scripts/ingest/harmonize.ts` ran on supplied local `2020–2025` CSVs (`24,310` MODIS + `153,533` VIIRS = `177,843` rows; `4,084` `monthly-harmonized.json` rows; national factor `4.09777677`). All ingestion tests pass. |
 | Attribution UI Copy | `[x]` Done | `src/content/data-notes.ts` exports `DATA_ATTRIBUTION`, `DATA_LIMITATIONS`, `HARMONIZATION_NOTE`. |
-| **Database Loading** | `[!]` **Blocked on credentials** | `scripts/ingest/load-supabase.ts` maps and validates all 6 table payloads; the full local dry run passes. No live database write or row count was verified because `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` were absent from the process environment. |
-| **Schema & ID Alignment** | `[!]` **Mapping implemented; sign-off pending** | The loader maps `parentId` to `parent_id`, uses `PH` for the country, retains source-derived ADM2 IDs, maps aggregate/factor columns, and preserves hotspot provenance/confidence. Member 2/3 confirmation remains outstanding. |
-| **Historical Window & Keys** | `[!]` **Blocked** | The available local CSVs cover only `2020–2025`; no pre-2020 or 2026 records are available. `FIRMS_MAP_KEY` was absent from the process environment. The local harmonized output has `4,084` direct VIIRS rows and no estimated rows. |
+| **Database Loading** | `[!]` **Paused for ID reconciliation** | Keys are present in `.env.local`. Read-only live check (2026-11-14): `regions=88`, `harmonization_factors=1`, and the other four tables have `0` rows. The existing country row is not `PH`; 87 ADM2 rows reference it. No seed was attempted. |
+| **Schema & ID Alignment** | `[!]` **Mapping verified; live alignment pending** | The field mapping matches the checked-in migration and the UI expects country ID `PH`. The live database still has one legacy country ID, so a seed would create a duplicate country unless that row is reconciled. Member 2/3 sign-off remains outstanding. |
+| **Historical Window & Keys** | `[!]` **Data gap remains** | The available local CSVs cover only `2020–2025`; no pre-2020 or 2026 records are available. `FIRMS_MAP_KEY` is present in `.env.local`, but the archive request and Philippine coverage metadata remain unverified. The local harmonized output has `4,084` direct VIIRS rows and no estimated rows. |
 | **Node 24 Test Runner** | `[x]` Fixed | Replaced the constructor parameter property in `aggregate.ts`; all 14 ingestion tests pass without `--experimental-transform-types`. |
 
 ---
@@ -61,11 +61,11 @@ Member 1 delivers the verified NASA FIRMS MODIS + VIIRS ingestion pipeline, grid
 
 ## 5. Environment Variables You Use
 
-| Variable | Process environment status (values never printed) | Purpose |
+| Variable | Availability (values never printed) | Purpose |
 |---|---|---|
-| `SUPABASE_URL` | `[ ]` Not set in this session | Server target for database seeding (`scripts/ingest/`). |
-| `SUPABASE_SERVICE_ROLE_KEY` | `[ ]` Not set in this session | Server-only write key for seeding Supabase tables (never expose client-side or commit). |
-| `FIRMS_MAP_KEY` | `[ ]` Not set in this session | Needed only if fetching live FIRMS NRT/Area API beyond supplied CSVs. |
+| `SUPABASE_URL` | Present in ignored `.env.local`; load with `node --env-file=.env.local` | Server target for database seeding (`scripts/ingest/`). |
+| `SUPABASE_SERVICE_ROLE_KEY` | Present in ignored `.env.local`; value never printed | Server-only write key for seeding Supabase tables (never expose client-side or commit). |
+| `FIRMS_MAP_KEY` | Present in ignored `.env.local`; value never printed | Needed only if fetching live FIRMS NRT/Area API beyond supplied CSVs. |
 
 ---
 
@@ -74,8 +74,8 @@ Member 1 delivers the verified NASA FIRMS MODIS + VIIRS ingestion pipeline, grid
 | Priority | Task ID | Status | Target Deliverable |
 |---|---|---|---|
 | `MVP-MUST` | **M1-T1** | `[x]` Done | Removed the Node 24 parameter-property syntax blocker; all 14 ingest tests pass. |
-| `MVP-MUST` | **M1-T2** | `[!]` Mapping implemented; sign-off pending | Mapped the local payloads to the migration schema and selected `PH` for country plus stable source-derived ADM2 IDs; awaiting Member 2/3 sign-off. |
-| `MVP-MUST` | **M1-T3** | `[!]` Dry run ready; live seed blocked | Added the idempotent six-table loader; no database write until the Supabase variables are available. |
+| `MVP-MUST` | **M1-T2** | `[!]` Mapping verified; reconciliation/sign-off pending | Migration fields and UI country lookup match the loader mapping; the live database still has a legacy country ID, and Member 2/3 sign-off is outstanding. |
+| `MVP-MUST` | **M1-T3** | `[!]` Dry run ready; live seed paused | Loader credentials are present in `.env.local`; a read-only check found a legacy country row with 87 child regions. Resolve that ID before writing to avoid a duplicate country. |
 | `MVP-MUST` | **M1-T4** | `[x]` Scope fallback documented | The 2020–2025 local subset and its limits are documented in data, harmonization, and presentation materials; no early-2000s or 2026 records are claimed. |
 | `MVP-SHOULD` | **M1-T5** | `[!]` Blocked | Full-history and database validation remain unavailable; the provisional metrics are retained with their limitations. |
 | `MVP-SHOULD` | **M1-T6** | `[!]` Handoff prepared; reconciliation pending | Exact provisional figures are in `docs-presentation-data/member-1-handoff.md`; post-load reconciliation and Member 4 confirmation remain. |
@@ -132,7 +132,7 @@ Member 1 delivers the verified NASA FIRMS MODIS + VIIRS ingestion pipeline, grid
 - **Objective:** Obtain pre-2018 MODIS archive (2001/2003–2019) and current `2026` FIRMS observations so the harmonized calendar delivers the early-2000s-to-present scope.
 - **Files:** `data/**` (gitignored raw/processed files), `docs/DATA.md`, `docs/HARMONIZATION.md`.
 - **Steps:**
-  1. Check `.env.local` for `FIRMS_MAP_KEY` (currently missing) or submit NASA FIRMS Archive Download requests for Philippines `MODIS_SP` (2000-11 / 2003-01 through 2019-12) and `2026` `MODIS_NRT` / `VIIRS_NOAA20_NRT` / `VIIRS_SNPP_SP`.
+  1. `FIRMS_MAP_KEY` is present in `.env.local`; use it only through the process environment. Submit NASA FIRMS Archive Download requests for Philippines `MODIS_SP` (2000-11 / 2003-01 through 2019-12) and `2026` `MODIS_NRT` / `VIIRS_NOAA20_NRT` / `VIIRS_SNPP_SP`; the key does not establish archive coverage or replace the request manifest.
   2. Process year-by-year through `ingest.ts` -> `aggregate.ts` -> `harmonize.ts` -> `load-supabase.ts` (keep raw points only for recent 12–24 months in `hotspots`; aggregates-only for early 2000s–2023).
   3. Confirm `monthly-harmonized.json` now generates real `is_estimated=true` rows for pre-VIIRS months (`< 2018-04` for NOAA-20 or `< 2012-01` if Suomi-NPP VIIRS is added!).
   4. If NASA FIRMS Archive turnaround misses hackathon deadline, explicitly document exact downloaded range (`2020–2025` provisional vs expanded) in `docs/DATA.md` & `docs/HARMONIZATION.md` and notify Member 4 so slide claims stay 100% honest.
