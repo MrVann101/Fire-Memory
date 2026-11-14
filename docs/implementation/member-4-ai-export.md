@@ -251,7 +251,7 @@ no secret or stack trace is exposed.
 - [x] Ten-plus AI cases pass.
 - [ ] Hotspot CSV matches contract columns and warns when truncated.
 - [ ] Analytics CSV contains year, month, metric, count, estimated, median.
-- [ ] Assistant has loading/error states, suggested questions, and disclaimer.
+- [x] Assistant has loading/error states, suggested questions, and disclaimer.
 - [ ] Export button has exact props and uses active dashboard filters.
 - [ ] Four slides, timed script, Q&A, and backup-video plan are complete.
 
