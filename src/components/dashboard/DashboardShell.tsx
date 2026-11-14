@@ -568,60 +568,6 @@ export default function DashboardShell({
               Satellite activity dashboard
             </h1>
             <section
-              className="map-summary-cards"
-              aria-label="Selected month fire activity summary"
-            >
-              <article className="map-summary-card">
-                <p className="map-summary-card-label">{summaryMonth} Activity</p>
-                <strong className="map-summary-card-value">
-                  {formatSummaryNumber(summary, summary.data?.currentCount)}
-                </strong>
-                <span className="map-summary-card-detail">
-                  {summaryRegion} · {activityMetricDetail}
-                </span>
-              </article>
-              <article className="map-summary-card">
-                <p className="map-summary-card-label">VIIRS Active-Fire (375m)</p>
-                <strong className="map-summary-card-value">
-                  {formatSummaryNumber(summary, summary.data?.byInstrument.VIIRS)}
-                </strong>
-                <span className="map-summary-card-detail">
-                  Raw active cell-days
-                </span>
-              </article>
-              <article className="map-summary-card">
-                <p className="map-summary-card-label">MODIS Active-Fire (1km)</p>
-                <strong className="map-summary-card-value">
-                  {formatSummaryNumber(summary, summary.data?.byInstrument.MODIS)}
-                </strong>
-                <span className="map-summary-card-detail">
-                  Raw active cell-days
-                </span>
-              </article>
-              <article className="map-summary-card">
-                <p className="map-summary-card-label">
-                  {summaryMonth} Historical Median
-                </p>
-                <strong className="map-summary-card-value">
-                  {formatSummaryNumber(summary, summary.data?.historicalMedian)}
-                </strong>
-                <span className="map-summary-card-detail">
-                  Baseline: {baselineDetail}
-                </span>
-              </article>
-              <article className="map-summary-card map-summary-card-anomaly">
-                <p className="map-summary-card-label">Anomaly vs. Median</p>
-                <strong className="map-summary-card-value">
-                  {formatAnomalyPercent(summary, summary.data?.anomalyPercent)}
-                </strong>
-                <span
-                  className={`map-summary-status map-summary-status-${anomalyClass}`}
-                >
-                  {anomalyLabel}
-                </span>
-              </article>
-            </section>
-            <section
               className="map-workspace"
               id="map-section"
               aria-label="Satellite fire map"
@@ -636,6 +582,77 @@ export default function DashboardShell({
             drawRectangle={isDrawingArea}
             onDrawComplete={activateCustomArea}
           />
+            <section
+              className="map-summary-cards"
+              aria-label="Selected month fire activity summary"
+            >
+              <article className="map-summary-card">
+                <p className="map-summary-card-label">{summaryMonth} Activity</p>
+                <strong className="map-summary-card-value">
+                  {formatSummaryNumber(summary, summary.data?.currentCount)}
+                </strong>
+                <span className="map-summary-card-detail">
+                  {summaryRegion} · {activityMetricDetail}
+                </span>
+                <span className="map-summary-card-disclaimer">
+                  Decision Support Intelligence • Non-Predictive Alert
+                </span>
+              </article>
+              <article className="map-summary-card">
+                <p className="map-summary-card-label">VIIRS Active-Fire (375m)</p>
+                <strong className="map-summary-card-value">
+                  {formatSummaryNumber(summary, summary.data?.byInstrument.VIIRS)}
+                </strong>
+                <span className="map-summary-card-detail">
+                  Raw active cell-days
+                </span>
+                <span className="map-summary-card-disclaimer">
+                  Decision Support Intelligence • Non-Predictive Alert
+                </span>
+              </article>
+              <article className="map-summary-card">
+                <p className="map-summary-card-label">MODIS Active-Fire (1km)</p>
+                <strong className="map-summary-card-value">
+                  {formatSummaryNumber(summary, summary.data?.byInstrument.MODIS)}
+                </strong>
+                <span className="map-summary-card-detail">
+                  Raw active cell-days
+                </span>
+                <span className="map-summary-card-disclaimer">
+                  Decision Support Intelligence • Non-Predictive Alert
+                </span>
+              </article>
+              <article className="map-summary-card">
+                <p className="map-summary-card-label">
+                  {summaryMonth} Historical Median
+                </p>
+                <strong className="map-summary-card-value">
+                  {formatSummaryNumber(summary, summary.data?.historicalMedian)}
+                </strong>
+                <span className="map-summary-card-detail">
+                  Baseline: {baselineDetail}
+                </span>
+                <span className="map-summary-card-disclaimer">
+                  Decision Support Intelligence • Non-Predictive Alert
+                </span>
+              </article>
+              <article
+                className={`map-summary-card map-summary-card-anomaly map-summary-card-anomaly-${anomalyClass}`}
+              >
+                <p className="map-summary-card-label">Anomaly vs. Median</p>
+                <strong className="map-summary-card-value">
+                  {formatAnomalyPercent(summary, summary.data?.anomalyPercent)}
+                </strong>
+                <span
+                  className={`map-summary-status map-summary-status-${anomalyClass}`}
+                >
+                  {anomalyLabel}
+                </span>
+                <span className="map-summary-card-disclaimer">
+                  Decision Support Intelligence • Non-Predictive Alert
+                </span>
+              </article>
+            </section>
           <div
             className={`map-filter-popover${isFilterPopoverOpen ? " is-open" : ""}`}
           >
