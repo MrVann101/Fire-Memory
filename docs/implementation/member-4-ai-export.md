@@ -241,7 +241,7 @@ no secret or stack trace is exposed.
 
 ## 9. Handoff checklist
 
-- [ ] Gemini SDK/model/package details are checked against current official
+- [x] Gemini SDK/model/package details are checked against current official
       documentation or marked `VERIFY`.
 - [ ] `GEMINI_API_KEY` is server-only.
 - [ ] Prompt uses only `AnalyticsSummary` and treats question as untrusted.
