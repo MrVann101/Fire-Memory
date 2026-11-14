@@ -10,6 +10,35 @@ const ALLOWED_LAYERS = new Set([
   "fires_viirs_7,fires_modis_7",
 ]);
 
+// 1x1 transparent PNG fallback so Leaflet never shows broken tile icons if NASA WMS is unreachable or returns an OGC XML exception.
+const TRANSPARENT_PNG_BYTES = Uint8Array.from(
+  Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+    "base64"
+  )
+);
+
+function getParamCaseInsensitive(
+  searchParams: URLSearchParams,
+  name: string
+): string | null {
+  return (
+    searchParams.get(name.toLowerCase()) ??
+    searchParams.get(name.toUpperCase()) ??
+    searchParams.get(name)
+  );
+}
+
+function transparentPngResponse(): NextResponse {
+  return new NextResponse(TRANSPARENT_PNG_BYTES, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Type": "image/png",
+    },
+  });
+}
+
 export async function GET(request: NextRequest): Promise<Response> {
   try {
     await connection();
@@ -27,42 +56,57 @@ export async function GET(request: NextRequest): Promise<Response> {
 
     const searchParams = request.nextUrl.searchParams;
     const layers =
-      searchParams.get("layers") ??
-      searchParams.get("layer") ??
+      getParamCaseInsensitive(searchParams, "layers") ??
+      getParamCaseInsensitive(searchParams, "layer") ??
       "fires_viirs_24,fires_modis_24";
     if (!ALLOWED_LAYERS.has(layers)) {
       throw new AppValidationError("Unsupported FIRMS WMS layer.");
     }
 
     const upstreamUrl = new URL(
-      `${FIRMS_WMS_URL}/${encodeURIComponent(mapKey)}/${layers}/`
+      `${FIRMS_WMS_URL}/${encodeURIComponent(mapKey)}/`
     );
     upstreamUrl.searchParams.set("REQUEST", "GetMap");
     upstreamUrl.searchParams.set("SERVICE", "WMS");
     upstreamUrl.searchParams.set("VERSION", "1.1.1");
+    upstreamUrl.searchParams.set("LAYERS", layers);
     upstreamUrl.searchParams.set("FORMAT", "image/png");
     upstreamUrl.searchParams.set("TRANSPARENT", "true");
+    upstreamUrl.searchParams.set(
+      "STYLES",
+      getParamCaseInsensitive(searchParams, "styles") ?? ""
+    );
 
-    for (const name of ["BBOX", "WIDTH", "HEIGHT", "SRS", "STYLES"]) {
-      const value = searchParams.get(name.toLowerCase());
+    for (const name of ["BBOX", "WIDTH", "HEIGHT", "SRS"]) {
+      const value =
+        getParamCaseInsensitive(searchParams, name) ??
+        (name === "SRS" ? getParamCaseInsensitive(searchParams, "CRS") : null);
       if (value) {
         upstreamUrl.searchParams.set(name, value);
       }
     }
 
-    const upstream = await fetch(upstreamUrl, {
-      headers: { Accept: "image/png" },
-      cache: "no-store",
-    });
-    if (!upstream.ok) {
-      throw new Error(`FIRMS WMS returned HTTP ${upstream.status}.`);
+    let upstream: Response;
+    try {
+      upstream = await fetch(upstreamUrl, {
+        headers: { Accept: "image/png" },
+        cache: "no-store",
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch {
+      return transparentPngResponse();
+    }
+
+    const contentType = upstream.headers.get("content-type") ?? "";
+    if (!upstream.ok || !contentType.toLowerCase().startsWith("image/")) {
+      return transparentPngResponse();
     }
 
     return new NextResponse(await upstream.arrayBuffer(), {
       status: 200,
       headers: {
         "Cache-Control": "no-store",
-        "Content-Type": upstream.headers.get("content-type") ?? "image/png",
+        "Content-Type": contentType || "image/png",
       },
     });
   } catch (error) {

@@ -101,7 +101,8 @@ export default function MapView({
               i
             </span>
             <span>
-              No satellite detections are available in this raw window.
+              No satellite thermal hotspots were recorded in this area for the
+              selected date window.
             </span>
           </div>
         )}
@@ -110,40 +111,39 @@ export default function MapView({
       <div className="map-metadata">
         <p className="map-attribution">
           {isLiveData
-            ? "Cloud-free NASA reference layers with a live NASA FIRMS WMS fire layer."
-            : "Satellite imagery © NASA EOSDIS GIBS (VIIRS Suomi-NPP); NASA FIRMS historical detections."}{" "}
-          Imagery date:{" "}
-          {isLiveData
-            ? "cloud-free FIRMS reference view"
-            : imageryDate ?? "waiting for the selected month"}. Detections
-          are thermal observations, not confirmed fire incidents.
+            ? "Cloud-free satellite land basemap (NASA EOSDIS GIBS Blue Marble & Esri World Imagery) with NASA reference borders and live NASA FIRMS thermal hotspot layer."
+            : `Cloud-free satellite land basemap (NASA EOSDIS GIBS Blue Marble & Esri World Imagery) with NASA reference borders and NASA FIRMS historical detections${imageryDate ? ` (reference period: ${imageryDate})` : ""}.`}{" "}
+          Hotspots indicate satellite-detected heat sources—coordinate with BFP
+          or barangay responders to verify on the ground.
         </p>
         <p className="map-drilldown-note">
-          Zoom to level 10 or closer to see approximate MODIS and VIIRS sensor
-          footprints around each detection. These are observation footprints,
-          not confirmed affected areas.
+          Zoom to level 10 or closer to view sensor scan footprints: solid
+          red-orange circles show high-detail VIIRS (375 m) and dashed orange
+          circles show wide-area MODIS (1 km). Circles show satellite scan area,
+          not confirmed burn perimeter.
         </p>
         <p className="raw-window">
-          <strong>Raw window:</strong>{" "}
+          <strong>Map detection window:</strong>{" "}
           {rawWindow
             ? `${rawWindow.start} to ${rawWindow.end} (UTC)`
             : response
-              ? "No raw-window dates available."
+              ? "No point detections available for this date range."
               : resource.error
                 ? "Unavailable because hotspot data failed to load."
-                : "Loading or not selected."}
+                : "Loading selected period…"}
         </p>
         {isLiveData && (
           <p className="map-drilldown-note" role="status">
-            Current-period map uses live NASA FIRMS observations for the
-            selected live period. Historical analytics remain unchanged.
+            Current-period map uses live NASA FIRMS thermal observations for
+            CDRRMO situational monitoring. Monthly historical baseline analytics
+            remain unchanged.
           </p>
         )}
         {response && (
           <div className="map-response-meta" aria-live="polite">
             <span>
               {response.returned.toLocaleString("en-US")} of{" "}
-              {response.total.toLocaleString("en-US")} detections shown
+              {response.total.toLocaleString("en-US")} thermal hotspots shown
             </span>
             {response.truncated && (
               <span className="truncation-note" role="status">
@@ -167,8 +167,9 @@ export default function MapView({
           childrenResource.data &&
           childrenResource.data.length > 0 && (
             <p className="map-drilldown-note">
-              Province bubbles are approximate bbox-center summaries, not
-              province boundaries. Select a bubble to drill down.
+              Orange-to-red province bubbles show relative hotspot volume at
+              each province’s approximate center. Select a bubble to inspect
+              that province.
             </p>
           )}
       </div>

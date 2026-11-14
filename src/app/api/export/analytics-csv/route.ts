@@ -8,7 +8,7 @@ import {
   RegionNotFoundError,
   parseBBoxParam,
 } from "@/lib/db/validation";
-import { toAnalyticsCsv } from "@/lib/export/csv";
+import { buildAnalyticsCsvFilename, toAnalyticsCsv } from "@/lib/export/csv";
 import type { AnalyticsCsvRow, ExportMetric } from "@/lib/export/types";
 
 function parseMetric(value: string | null): ExportMetric {
@@ -102,13 +102,21 @@ export async function GET(request: Request) {
           : "",
     }));
     const csv = toAnalyticsCsv(rows);
-    const filename = `fire-memory-analytics-${filters.regionId}-${filters.metric}.csv`;
+    const filename = buildAnalyticsCsvFilename(
+      filters.regionId,
+      filters.year,
+      filters.month,
+      filters.metric,
+    );
 
     return new Response(`\uFEFF${csv}`, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
+        "X-Fire-Memory-Truncated": "false",
+        "Access-Control-Expose-Headers":
+          "Content-Disposition, X-Fire-Memory-Truncated",
       },
     });
   } catch (error) {

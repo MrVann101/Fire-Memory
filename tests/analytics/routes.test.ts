@@ -7,6 +7,8 @@ import { GET as getSummaryRoute } from "@/app/api/analytics/summary/route";
 import { GET as getCalendarRoute } from "@/app/api/analytics/calendar/route";
 import { GET as getChildrenRoute } from "@/app/api/analytics/children/route";
 import { GET as getHarmonizationRoute } from "@/app/api/analytics/harmonization/route";
+import { GET as getFirmsAreaRoute } from "@/app/api/firms/area/route";
+import { GET as getFirmsWmsRoute } from "@/app/api/firms/wms/route";
 
 describe("Next.js API Route Handlers Smoke & Error Tests", () => {
   const originalMocks = process.env.NEXT_PUBLIC_USE_MOCKS;
@@ -84,5 +86,42 @@ describe("Next.js API Route Handlers Smoke & Error Tests", () => {
       )
     );
     assert.equal(harmRes.status, 200);
+  });
+
+  it("GET /api/firms/area validates bbox and falls back gracefully when upstream FIRMS is unavailable", async () => {
+    const missingBboxRes = await getFirmsAreaRoute(
+      new NextRequest("http://localhost/api/firms/area?instrument=ALL")
+    );
+    assert.equal(missingBboxRes.status, 400);
+
+    const okRes = await getFirmsAreaRoute(
+      new NextRequest(
+        "http://localhost/api/firms/area?bbox=116.9,4.5,126.6,21.1&instrument=ALL&start=2026-11-01&end=2026-11-14"
+      )
+    );
+    assert.equal(okRes.status, 200);
+    const body = await okRes.json();
+    assert.ok(Array.isArray(body.hotspots));
+  });
+
+  it("GET /api/firms/wms validates layers and returns a valid PNG tile response", async () => {
+    const originalKey = process.env.FIRMS_MAP_KEY;
+    process.env.FIRMS_MAP_KEY = "test-firms-map-key";
+    try {
+      const badLayerRes = await getFirmsWmsRoute(
+        new NextRequest("http://localhost/api/firms/wms?layers=invalid_layer")
+      );
+      assert.equal(badLayerRes.status, 400);
+
+      const okRes = await getFirmsWmsRoute(
+        new NextRequest(
+          "http://localhost/api/firms/wms?LAYERS=fires_viirs_24,fires_modis_24&BBOX=120,5,126,18&WIDTH=256&HEIGHT=256&SRS=EPSG:3857"
+        )
+      );
+      assert.equal(okRes.status, 200);
+      assert.match(okRes.headers.get("content-type") ?? "", /^image\/png/i);
+    } finally {
+      process.env.FIRMS_MAP_KEY = originalKey;
+    }
   });
 });

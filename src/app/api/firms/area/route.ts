@@ -1,5 +1,6 @@
 import { connection, NextRequest, NextResponse } from "next/server";
 import { fetchFirmsArea } from "@/lib/firms/area";
+import { getHotspotWindow, queryHotspots } from "@/lib/db/hotspots";
 import {
   errorToHttpResponse,
   parseBBoxParam,
@@ -59,30 +60,63 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const result = await fetchFirmsArea({
-      bbox,
-      instrument: instrument as "MODIS" | "VIIRS" | "ALL",
-      days,
-      date,
-      start,
-      end,
-      limit,
-    });
+    const typedInstrument = instrument as "MODIS" | "VIIRS" | "ALL";
+    try {
+      const result = await fetchFirmsArea({
+        bbox,
+        instrument: typedInstrument,
+        days,
+        date,
+        start,
+        end,
+        limit,
+      });
 
-    return NextResponse.json(
-      {
-        filters: {
+      return NextResponse.json(
+        {
+          filters: {
+            regionId: "custom",
+            bbox,
+            start: result.rawWindow?.start ?? start ?? date ?? "",
+            end: result.rawWindow?.end ?? end ?? date ?? "",
+            instrument: typedInstrument,
+          },
+          returned: result.hotspots.length,
+          ...result,
+        },
+        { headers: { "Cache-Control": "no-store" } }
+      );
+    } catch {
+      // Graceful fallback to the local hotspot archive if upstream NASA FIRMS NRT is unreachable or rate-limited.
+      const windowInfo = await getHotspotWindow().catch(() => ({
+        rawWindow: null,
+        lastUpdated: null,
+      }));
+      const fallbackEnd =
+        windowInfo.rawWindow?.end ?? end ?? date ?? new Date().toISOString().slice(0, 10);
+      const fallbackStartDate = new Date(`${fallbackEnd}T00:00:00.000Z`);
+      fallbackStartDate.setUTCDate(fallbackStartDate.getUTCDate() - (days - 1));
+      const fallbackStart =
+        start && windowInfo.rawWindow && start <= windowInfo.rawWindow.end
+          ? start
+          : fallbackStartDate.toISOString().slice(0, 10);
+
+      const archiveResult = await queryHotspots(
+        {
           regionId: "custom",
           bbox,
-          start: result.rawWindow?.start ?? start ?? date ?? "",
-          end: result.rawWindow?.end ?? end ?? date ?? "",
-          instrument,
+          start: fallbackStart,
+          end: fallbackEnd,
+          instrument: typedInstrument,
         },
-        returned: result.hotspots.length,
-        ...result,
-      },
-      { headers: { "Cache-Control": "no-store" } }
-    );
+        limit
+      );
+
+      return NextResponse.json(archiveResult, {
+        status: 200,
+        headers: { "Cache-Control": "no-store" },
+      });
+    }
   } catch (error) {
     return errorToHttpResponse(error, {
       route: "/api/firms/area",

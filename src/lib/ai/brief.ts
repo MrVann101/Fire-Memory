@@ -73,11 +73,11 @@ const NUMBER_PATTERN = /-?\d+(?:\.\d+)?/g;
 const CONFIRMED_FIRE_PATTERN = /\bconfirmed fires?\b/gi;
 
 const DISCLAIMER =
-  "AI interpretation only. Satellite detections are not confirmed fires, forecasts, or emergency instructions. Verify important decisions with official sources.";
+  "CDRRMO Advisory AI interpretation only. Satellite detections are not confirmed fires, forecasts, or emergency instructions. Coordinate field verification and operational decisions through official CDRRMO, BFP, and LGU incident command channels.";
 
 const UNSAFE_QUESTION_RESPONSE: AiBriefResponseForAi = {
   answer:
-    "Computed values: I can interpret the supplied analytics, but I cannot provide evacuation or prediction advice.\n\nInterpretation: Please use official emergency and local response channels for operational decisions.\n\nLimitations: This assistant only explains supplied satellite-detection statistics.",
+    "Computed values: I can interpret the supplied analytics for CDRRMO situational awareness, but I cannot provide evacuation or prediction advice.\n\nInterpretation: Please coordinate urgent life-safety, field verification, and operational response decisions through official CDRRMO, BFP, and LGU incident command channels.\n\nLimitations: This CDRRMO Advisory AI only explains supplied satellite-detection statistics, which are thermal anomalies and not confirmed fires.",
   disclaimer: DISCLAIMER,
 };
 

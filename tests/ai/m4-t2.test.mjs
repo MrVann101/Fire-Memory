@@ -69,6 +69,9 @@ test("refuses unsafe questions without calling the provider", async () => {
 
   assert.equal(called, false);
   assert.match(response.answer, /cannot provide evacuation/i);
+  assert.match(response.answer, /CDRRMO/i);
+  assert.match(response.disclaimer, /not confirmed fires/i);
+  assert.match(response.disclaimer, /CDRRMO/i);
 });
 
 test("rejects invented numbers and unsafe provider claims", () => {

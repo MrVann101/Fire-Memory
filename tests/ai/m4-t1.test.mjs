@@ -71,6 +71,7 @@ test("keeps the question separate from the analytics JSON", () => {
     content.indexOf("END ANALYTICS SUMMARY JSON") <
       content.indexOf("BEGIN USER QUESTION"),
   );
+  assert.match(AI_SYSTEM_INSTRUCTION, /CDRRMO/i);
   assert.match(AI_SYSTEM_INSTRUCTION, /never invent counts/i);
   assert.match(AI_SYSTEM_INSTRUCTION, /not confirmed fires/i);
   assert.match(AI_SYSTEM_INSTRUCTION, /grid-approximated/i);

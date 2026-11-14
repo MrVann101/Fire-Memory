@@ -4,6 +4,10 @@ import test from "node:test";
 import {
   ANALYTICS_CSV_COLUMNS,
   HOTSPOT_CSV_COLUMNS,
+  buildAnalyticsCsvFilename,
+  buildFilenameSegment,
+  buildHotspotCsvFilename,
+  parseContentDispositionFilename,
   toAnalyticsCsv,
   toCsv,
 } from "../../src/lib/export/csv.ts";
@@ -73,4 +77,24 @@ test("protects tab and carriage-return formula prefixes", () => {
 
   assert.match(csv, /'\t=SUM\(A1:A2\)/);
   assert.match(csv, /'\r\+SUM\(A1:A2\)/);
+});
+
+test("builds descriptive CDRRMO CSV filenames and parses Content-Disposition", () => {
+  assert.equal(buildFilenameSegment("CAR / Benguet"), "CAR-Benguet");
+  assert.equal(buildFilenameSegment("///"), "selection");
+  assert.equal(
+    buildHotspotCsvFilename("ph-benguet", "2025-03-01", "2025-03-31"),
+    "fire-memory-hotspots-ph-benguet-2025-03-01-to-2025-03-31.csv",
+  );
+  assert.equal(
+    buildAnalyticsCsvFilename("ph-benguet", 2025, 3, "harmonized"),
+    "fire-memory-analytics-ph-benguet-2025-03-harmonized.csv",
+  );
+  assert.equal(
+    parseContentDispositionFilename(
+      'attachment; filename="fire-memory-hotspots-ph-benguet-2025-03-01-to-2025-03-31.csv"',
+    ),
+    "fire-memory-hotspots-ph-benguet-2025-03-01-to-2025-03-31.csv",
+  );
+  assert.equal(parseContentDispositionFilename(null), null);
 });

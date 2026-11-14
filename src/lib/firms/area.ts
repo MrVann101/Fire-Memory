@@ -175,17 +175,47 @@ async function fetchSource(
     throw new DatabaseProviderError("FIRMS response could not be read.");
   }
 
-  const parsed = Papa.parse<FirmsRow>(csv, {
+  const trimmedCsv = csv.trim();
+  if (!trimmedCsv) {
+    return [];
+  }
+
+  const firstLine = trimmedCsv.split(/\r?\n/, 1)[0]?.toLowerCase() ?? "";
+  if (!firstLine.includes("latitude") || !firstLine.includes("longitude")) {
+    throw new DatabaseProviderError("FIRMS returned invalid CSV data.");
+  }
+
+  const parsed = Papa.parse<FirmsRow>(trimmedCsv, {
     header: true,
+    delimiter: ",",
     skipEmptyLines: true,
   });
-  if (parsed.errors.length > 0) {
+  if (parsed.errors.length > 0 && parsed.data.length === 0) {
     throw new DatabaseProviderError("FIRMS returned invalid CSV data.");
   }
 
   return parsed.data
     .map((row, index) => mapRow(row, source, index))
     .filter((hotspot): hotspot is Hotspot => hotspot !== null);
+}
+
+async function fetchSourcesSettled(
+  mapKey: string,
+  sources: string[],
+  query: FirmsAreaQuery
+): Promise<{ hotspots: Hotspot[]; succeededCount: number }> {
+  const settled = await Promise.allSettled(
+    sources.map((source) => fetchSource(mapKey, source, query))
+  );
+  const hotspots: Hotspot[] = [];
+  let succeededCount = 0;
+  for (const item of settled) {
+    if (item.status === "fulfilled") {
+      succeededCount += 1;
+      hotspots.push(...item.value);
+    }
+  }
+  return { hotspots, succeededCount };
 }
 
 export async function fetchFirmsArea(
@@ -209,7 +239,10 @@ export async function fetchFirmsArea(
     );
   }
 
-  const sourceResults: Hotspot[][] = [];
+  const sources = getFirmsSources(query.instrument);
+  const collectedHotspots: Hotspot[] = [];
+  let totalSucceededCalls = 0;
+
   if (query.start && query.end) {
     if (query.start > query.end) {
       throw new DatabaseProviderError(
@@ -217,49 +250,81 @@ export async function fetchFirmsArea(
       );
     }
 
-    let cursor = query.start;
+    const startMs = new Date(`${query.start}T00:00:00.000Z`).getTime();
+    const endMs = new Date(`${query.end}T00:00:00.000Z`).getTime();
+    const requestedSpanDays = Math.max(
+      1,
+      Math.round((endMs - startMs) / 86_400_000) + 1
+    );
+
+    // NASA FIRMS NRT sources only retain recent days (~7-10 days).
+    // Cap date-chunked NRT requests to the latest 10 days of the requested window
+    // to prevent rate-limit exhaustion on month/year ranges.
+    const maxNrtSpanDays = 10;
+    const effectiveStartDate = new Date(endMs);
+    effectiveStartDate.setUTCDate(
+      effectiveStartDate.getUTCDate() -
+        Math.min(requestedSpanDays, maxNrtSpanDays) +
+        1
+    );
+    let cursor =
+      effectiveStartDate.toISOString().slice(0, 10) > query.start
+        ? effectiveStartDate.toISOString().slice(0, 10)
+        : query.start;
+
     while (cursor <= query.end) {
       const cursorDate = new Date(`${cursor}T00:00:00.000Z`);
       const chunkEnd = new Date(cursorDate);
       chunkEnd.setUTCDate(chunkEnd.getUTCDate() + MAX_DAY_RANGE - 1);
-      const end = chunkEnd.toISOString().slice(0, 10) < query.end
-        ? chunkEnd.toISOString().slice(0, 10)
-        : query.end;
+      const end =
+        chunkEnd.toISOString().slice(0, 10) < query.end
+          ? chunkEnd.toISOString().slice(0, 10)
+          : query.end;
       const days =
         Math.round(
-          (new Date(`${end}T00:00:00.000Z`).getTime() -
-            cursorDate.getTime()) /
+          (new Date(`${end}T00:00:00.000Z`).getTime() - cursorDate.getTime()) /
             86_400_000
         ) + 1;
-      const chunkResults = await Promise.all(
-        getFirmsSources(query.instrument).map((source) =>
-          fetchSource(mapKey, source, {
-            ...query,
-            days,
-            date: cursor,
-          })
-        )
-      );
-      sourceResults.push(...chunkResults);
+      const chunkResult = await fetchSourcesSettled(mapKey, sources, {
+        ...query,
+        days,
+        date: cursor,
+      });
+      collectedHotspots.push(...chunkResult.hotspots);
+      totalSucceededCalls += chunkResult.succeededCount;
       cursorDate.setUTCDate(cursorDate.getUTCDate() + days);
       cursor = cursorDate.toISOString().slice(0, 10);
     }
+
+    // If date-pinned NRT queries returned 0 hotspots (e.g. simulated 2026 clock skew
+    // vs NASA's real-world NRT clock) or failed, fetch the latest live NRT window
+    // without a pinned date so NASA returns its most recent active-fire observations.
+    if (collectedHotspots.length === 0) {
+      const fallbackDays = Math.min(MAX_DAY_RANGE, requestedSpanDays);
+      const latestResult = await fetchSourcesSettled(mapKey, sources, {
+        ...query,
+        days: fallbackDays,
+        date: undefined,
+      });
+      collectedHotspots.push(...latestResult.hotspots);
+      totalSucceededCalls += latestResult.succeededCount;
+    }
   } else {
-    const sourceResultsForLatest = await Promise.all(
-      getFirmsSources(query.instrument).map((source) =>
-        fetchSource(mapKey, source, {
-          ...query,
-          days: query.days ?? 5,
-        })
-      )
-    );
-    sourceResults.push(...sourceResultsForLatest);
+    const latestResult = await fetchSourcesSettled(mapKey, sources, {
+      ...query,
+      days: query.days ?? 5,
+    });
+    collectedHotspots.push(...latestResult.hotspots);
+    totalSucceededCalls += latestResult.succeededCount;
   }
-  const allHotspots = sourceResults
-    .flat()
-    .sort((a, b) =>
-      a.acquisitionDatetime.localeCompare(b.acquisitionDatetime)
-    );
+
+  if (totalSucceededCalls === 0) {
+    throw new DatabaseProviderError("FIRMS recent-data request failed.");
+  }
+
+  const allHotspots = collectedHotspots.sort((a, b) =>
+    a.acquisitionDatetime.localeCompare(b.acquisitionDatetime)
+  );
   const hotspots = allHotspots.slice(0, query.limit);
   const dates = allHotspots.map((hotspot) =>
     hotspot.acquisitionDatetime.slice(0, 10)

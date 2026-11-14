@@ -15,12 +15,49 @@ type ActivityBand = "low" | "moderate" | "high" | "very-high";
 type BubbleBand = ActivityBand | "no-data";
 
 const BUBBLE_COLORS: Record<BubbleBand, { stroke: string; fill: string }> = {
-  low: { stroke: "#047857", fill: "#10b981" },
-  moderate: { stroke: "#b45309", fill: "#f59e0b" },
-  high: { stroke: "#c2410c", fill: "#f97316" },
-  "very-high": { stroke: "#b91c1c", fill: "#ef4444" },
+  low: { stroke: "#ea580c", fill: "#fb923c" },
+  moderate: { stroke: "#c2410c", fill: "#f97316" },
+  high: { stroke: "#9a3412", fill: "#ea580c" },
+  "very-high": { stroke: "#991b1b", fill: "#ef4444" },
   "no-data": { stroke: "#475569", fill: "#64748b" },
 };
+
+function getHotspotBand(hotspot: Hotspot): ActivityBand {
+  const brightness = hotspot.brightness;
+  const confidence = hotspot.confidence;
+  const normalizedConfidence =
+    typeof confidence === "string" ? confidence.trim().toLowerCase() : null;
+  const numericConfidence =
+    typeof confidence === "number"
+      ? confidence
+      : normalizedConfidence !== null && normalizedConfidence !== ""
+        ? Number(normalizedConfidence)
+        : Number.NaN;
+
+  const isHighConfidence =
+    normalizedConfidence === "high" ||
+    normalizedConfidence === "h" ||
+    (!Number.isNaN(numericConfidence) && numericConfidence >= 80);
+
+  if (isHighConfidence || (brightness !== null && brightness >= 330)) {
+    return "very-high";
+  }
+  if (
+    (brightness !== null && brightness >= 315) ||
+    (!Number.isNaN(numericConfidence) && numericConfidence >= 65)
+  ) {
+    return "high";
+  }
+  if (
+    (brightness !== null && brightness >= 300) ||
+    normalizedConfidence === "nominal" ||
+    normalizedConfidence === "n" ||
+    (!Number.isNaN(numericConfidence) && numericConfidence >= 40)
+  ) {
+    return "moderate";
+  }
+  return "low";
+}
 
 function getActivityBand(count: number, maxCount: number): ActivityBand {
   const relativeCount = maxCount > 0 ? count / maxCount : 0;
@@ -41,6 +78,12 @@ function displayValue(value: string | number | null): string {
   return value === null ? "Not available" : String(value);
 }
 
+const WIDE_POPUP_LABELS = new Set([
+  "Acquisition time",
+  "Acquisition time (UTC)",
+  "CDRRMO guidance",
+]);
+
 function popupContent(
   title: string,
   fields: Array<[string, string]>
@@ -57,7 +100,7 @@ function popupContent(
   for (const [label, value] of fields) {
     const field = document.createElement("div");
     field.className = "detection-popup-field";
-    if (label === "Acquisition time") {
+    if (WIDE_POPUP_LABELS.has(label)) {
       field.classList.add("detection-popup-field--wide");
     }
 
@@ -110,26 +153,41 @@ function DetectionLayer({ hotspots }: { hotspots: Hotspot[] }) {
     });
 
     for (const hotspot of hotspots) {
+      const band = getHotspotBand(hotspot);
+      const bandColors = BUBBLE_COLORS[band];
+      const sensorResolution =
+        hotspot.instrument === "VIIRS"
+          ? "375 m grid (VIIRS high-detail)"
+          : "1 km grid (MODIS wide-area)";
+      const brightnessLabel =
+        hotspot.brightness === null
+          ? "Not available"
+          : `${hotspot.brightness} K`;
+
       const marker = L.marker([hotspot.latitude, hotspot.longitude], {
         icon: L.divIcon({
           className: "hotspot-marker-icon",
-          html: '<span class="hotspot-marker-dot"></span>',
+          html: `<span class="hotspot-marker-dot hotspot-marker-dot--${band}" style="background: var(--hotspot-${band}, ${bandColors.fill}); border-color: ${bandColors.stroke};"></span>`,
           iconSize: [16, 16],
           iconAnchor: [8, 8],
         }),
-        title: `Satellite detection: ${hotspot.acquisitionDatetime}`,
+        title: `Thermal Hotspot Detection (${hotspot.instrument}): ${hotspot.acquisitionDatetime}`,
         bubblingMouseEvents: false,
       });
 
       marker.bindPopup(
-        popupContent("Satellite detection", [
+        popupContent("Thermal Hotspot Detection", [
           ["Latitude", hotspot.latitude.toFixed(5)],
           ["Longitude", hotspot.longitude.toFixed(5)],
-          ["Acquisition time", formatAcquisitionTime(hotspot.acquisitionDatetime)],
           ["Satellite", hotspot.satellite],
           ["Instrument", hotspot.instrument],
+          [
+            "Acquisition time (UTC)",
+            formatAcquisitionTime(hotspot.acquisitionDatetime),
+          ],
+          ["Sensor Resolution", sensorResolution],
           ["Confidence", displayValue(hotspot.confidence)],
-          ["Brightness", displayValue(hotspot.brightness)],
+          ["Fire Radiative / Brightness Temp", brightnessLabel],
           ["Source product", displayValue(hotspot.sourceProduct)],
         ]),
         { maxWidth: 440 }
@@ -168,18 +226,20 @@ function HotspotFootprintLayer({ hotspots }: { hotspots: Hotspot[] }) {
       }
 
       for (const hotspot of hotspots) {
+        const isViirs = hotspot.instrument === "VIIRS";
         const radius = getFootprintRadius(hotspot);
         const footprint = L.circle([hotspot.latitude, hotspot.longitude], {
           radius,
-          color: hotspot.instrument === "VIIRS" ? "#0f766e" : "#b45309",
-          fillColor: hotspot.instrument === "VIIRS" ? "#14b8a6" : "#f59e0b",
+          color: isViirs ? "#ea580c" : "#f97316",
+          fillColor: isViirs ? "#ef4444" : "#fb923c",
+          dashArray: isViirs ? undefined : "4 4",
           fillOpacity: 0.14,
           weight: 1.5,
           bubblingMouseEvents: false,
         });
 
         footprint.bindTooltip(
-          `${hotspot.instrument} sensor footprint: approximately ${radius} m radius`,
+          `${hotspot.instrument} sensor resolution (~${radius} m radius — satellite scan area, not confirmed burn perimeter)`,
           { direction: "top", opacity: 0.9 }
         );
         layer.addLayer(footprint);
@@ -278,14 +338,27 @@ function ChildBubbleLayer({
         });
       });
 
+      const activityLabel =
+        band === "very-high"
+          ? "Very high relative activity"
+          : band === "high"
+            ? "High relative activity"
+            : band === "moderate"
+              ? "Moderate relative activity"
+              : band === "low"
+                ? "Low relative activity"
+                : "No data coverage";
+
       bubble.bindTooltip(`${child.name}: ${countLabel}`, {
         direction: "top",
         className: "province-bubble-label",
       });
       bubble.bindPopup(
-        popupContent(child.name, [
-          ["Satellite detections", countLabel],
-          ["Location", "Approximate center of region bounding box"],
+        popupContent(`${child.name} — Province Hotspot Summary`, [
+          ["Thermal Hotspot Detections", countLabel],
+          ["Relative Activity Level", activityLabel],
+          ["Marker Placement", "Approximate province bounding-box center"],
+          ["CDRRMO Drill-Down", "Select bubble to inspect province hotspots"],
         ])
       );
       bubble.on("click", () => onSelectRegion(child.regionId));
@@ -303,26 +376,57 @@ function ChildBubbleLayer({
 
 function RegionViewport({ region }: { region: Region | null }) {
   const map = useMap();
+  const regionId = region?.id ?? null;
+  const bboxWest = region?.bbox[0] ?? null;
+  const bboxSouth = region?.bbox[1] ?? null;
+  const bboxEast = region?.bbox[2] ?? null;
+  const bboxNorth = region?.bbox[3] ?? null;
+  const regionLevel = region?.level ?? null;
 
   useEffect(() => {
-    if (!region) {
-      map.setView([12.5, 122], 5);
+    const container = map.getContainer();
+    const handleResize = () => {
+      map.invalidateSize({ animate: false });
+    };
+    handleResize();
+    const timer = window.setTimeout(handleResize, 60);
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== "undefined") {
+      observer = new ResizeObserver(handleResize);
+      observer.observe(container);
+    }
+    return () => {
+      window.clearTimeout(timer);
+      observer?.disconnect();
+    };
+  }, [map]);
+
+  useEffect(() => {
+    map.invalidateSize({ animate: false });
+    if (
+      !regionId ||
+      bboxWest === null ||
+      bboxSouth === null ||
+      bboxEast === null ||
+      bboxNorth === null
+    ) {
+      map.setView([12.5, 122], 5, { animate: false });
       return;
     }
 
-    const [minLongitude, minLatitude, maxLongitude, maxLatitude] = region.bbox;
     map.fitBounds(
       [
-        [minLatitude, minLongitude],
-        [maxLatitude, maxLongitude],
+        [bboxSouth, bboxWest],
+        [bboxNorth, bboxEast],
       ],
       {
         padding: [24, 24],
         maxZoom:
-          region.level === "country" ? 6 : region.level === "province" ? 9 : 8,
+          regionLevel === "country" ? 6 : regionLevel === "province" ? 9 : 8,
+        animate: false,
       }
     );
-  }, [map, region]);
+  }, [map, regionId, bboxWest, bboxSouth, bboxEast, bboxNorth, regionLevel]);
 
   return null;
 }
@@ -414,7 +518,6 @@ export default function LeafletCanvas({
   selectedRegion,
   childCounts,
   regions,
-  imageryDate,
   useFirmsWms,
   firmsWmsLayer,
   onSelectRegion,
@@ -425,7 +528,7 @@ export default function LeafletCanvas({
   selectedRegion: Region | null;
   childCounts: ChildCount[];
   regions: Region[];
-  imageryDate: string | null;
+  imageryDate?: string | null;
   useFirmsWms: boolean;
   firmsWmsLayer: string;
   onSelectRegion: (regionId: string) => void;
@@ -434,49 +537,46 @@ export default function LeafletCanvas({
 }) {
   return (
     <MapContainer
-      center={[12.5, 122]}
-      zoom={5}
+      center={[12.8, 121.8]}
+      zoom={6}
       minZoom={4}
       maxZoom={18}
       scrollWheelZoom={true}
       worldCopyJump={true}
       zoomAnimation={true}
-      fadeAnimation={false}
+      fadeAnimation={true}
       className="leaflet-map"
-      aria-label="Map centered on the Philippines"
+      aria-label="Cloud-free Philippine thermal hotspot monitoring map"
     >
-      {imageryDate && !useFirmsWms && (
-        <TileLayer
-          attribution='<a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/global-imagery-browse-services-gibs">NASA EOSDIS GIBS</a> · VIIRS Suomi-NPP'
-          url={`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${imageryDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`}
-          maxZoom={18}
-          maxNativeZoom={9}
-          updateWhenZooming={true}
-          updateWhenIdle={false}
-          keepBuffer={4}
-        />
-      )}
       <TileLayer
-        attribution="NASA EOSDIS GIBS · Reference features"
+        key="esri-world-imagery-land"
+        attribution="Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
+        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+        minZoom={4}
+        maxZoom={18}
+        keepBuffer={4}
+      />
+      <TileLayer
+        key="gibs-reference-features"
+        attribution='<a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/global-imagery-browse-services-gibs">NASA EOSDIS GIBS</a> · Reference coastlines &amp; borders'
         url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Features_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png"
+        minZoom={4}
         maxZoom={18}
         maxNativeZoom={13}
-        updateWhenZooming={true}
-        updateWhenIdle={false}
         keepBuffer={4}
         opacity={0.75}
       />
       <TileLayer
-        attribution="NASA EOSDIS GIBS · Reference labels"
+        key="gibs-reference-labels"
+        attribution="NASA EOSDIS GIBS · Place labels"
         url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Labels_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png"
+        minZoom={4}
         maxZoom={18}
         maxNativeZoom={13}
-        updateWhenZooming={true}
-        updateWhenIdle={false}
         keepBuffer={4}
       />
       <RegionViewport region={selectedRegion} />
-      {useFirmsWms ? (
+      {useFirmsWms && (
         <WMSTileLayer
           url="/api/firms/wms"
           params={{
@@ -485,15 +585,12 @@ export default function LeafletCanvas({
             transparent: true,
             version: "1.1.1",
           }}
-          attribution="NASA FIRMS"
-          opacity={0.95}
-          updateWhenZooming={true}
-          updateWhenIdle={false}
+          attribution="NASA FIRMS Active Fire WMS"
+          opacity={0.9}
           keepBuffer={4}
         />
-      ) : (
-        <DetectionLayer hotspots={hotspots} />
       )}
+      <DetectionLayer hotspots={hotspots} />
       <HotspotFootprintLayer hotspots={hotspots} />
       <ChildBubbleLayer
         childCounts={childCounts}

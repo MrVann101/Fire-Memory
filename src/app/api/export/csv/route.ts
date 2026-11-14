@@ -7,12 +7,8 @@ import {
   RegionNotFoundError,
   parseBBoxParam,
 } from "@/lib/db/validation";
-import { toCsv } from "@/lib/export/csv";
+import { buildHotspotCsvFilename, toCsv } from "@/lib/export/csv";
 import type { HotspotFiltersForExport } from "@/lib/export/types";
-
-function buildFilenameSegment(value: string): string {
-  return value.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-|-$/g, "") || "selection";
-}
 
 function parseFilters(request: Request): HotspotFiltersForExport {
   const searchParams = new URL(request.url).searchParams;
@@ -59,13 +55,19 @@ export async function GET(request: Request) {
   try {
     const response = await queryHotspots(filters, 10_000);
     const csv = toCsv(response.hotspots);
-    const filename = `fire-memory-${buildFilenameSegment(filters.regionId)}-${filters.start}-${filters.end}-${filters.instrument ?? "ALL"}.csv`;
+    const filename = buildHotspotCsvFilename(
+      filters.regionId,
+      filters.start,
+      filters.end,
+    );
     return new Response(`\uFEFF${csv}`, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
         "X-Fire-Memory-Truncated": String(response.truncated),
+        "Access-Control-Expose-Headers":
+          "Content-Disposition, X-Fire-Memory-Truncated",
       },
     });
   } catch (error) {

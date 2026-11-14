@@ -145,12 +145,6 @@ const dashboardNavItems: DashboardNavItem[] = [
     label: "Anomaly Detection",
   },
   {
-    href: "/assistant",
-    feature: "assistant",
-    icon: "assistant",
-    label: "AI Assistant",
-  },
-  {
     href: "/export",
     feature: "export",
     icon: "export",
@@ -295,7 +289,9 @@ export default function DashboardShell({
 }: {
   activeFeature: DashboardFeature;
 }) {
+  const resolvedFeature = activeFeature === "assistant" ? "map" : activeFeature;
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [isCalendarFiltersOpen, setIsCalendarFiltersOpen] = useState(false);
   const calendarTheme = useSyncExternalStore(
     subscribeCalendarTheme,
@@ -339,7 +335,7 @@ export default function DashboardShell({
   const period =
     periodSelection ??
     hotspotWindow.data?.rawWindow?.end.slice(0, 7) ??
-    "";
+    "2025-12";
   const customRegion = useMemo<Region | null>(() => {
     if (!customBbox) {
       return null;
@@ -353,11 +349,24 @@ export default function DashboardShell({
       bbox: customBbox,
     };
   }, [customBbox]);
+  const defaultCountryRegion = useMemo<Region>(
+    () => ({
+      id: "PH",
+      name: "The Philippines",
+      level: "country",
+      parentId: null,
+      bbox: [116.9, 4.5, 126.6, 21.1],
+    }),
+    []
+  );
   const selectedRegion =
     regionId === "custom"
       ? customRegion
-      : regions.data?.find((region) => region.id === regionId) ?? null;
-  const countryBBox = regions.data?.find((region) => region.id === "PH")?.bbox;
+      : regions.data?.find((region) => region.id === regionId) ??
+        (regionId === "PH" ? defaultCountryRegion : null);
+  const countryBBox =
+    regions.data?.find((region) => region.id === "PH")?.bbox ??
+    defaultCountryRegion.bbox;
   const periodRange = useMemo(() => parsePeriod(period), [period]);
   const activateCustomArea = useCallback(
     (bbox: BBox) => {
@@ -573,12 +582,6 @@ export default function DashboardShell({
   const baselineDetail = baselineYears.length
     ? `${baselineYears.length} years (${baselineYears[0]}-${baselineYears[baselineYears.length - 1]})`
     : "No comparable baseline";
-  const activityMetricDetail =
-    isCurrentPeriod
-      ? "Live FIRMS active cell-days"
-      : metric === "harmonized"
-      ? "VIIRS-equivalent active cell-days"
-      : `Raw ${instrument === "ALL" ? "all-sensor" : instrument} active cell-days`;
   const liveCardValue = (value: number | undefined): string => {
     if (value !== undefined) {
       return value.toLocaleString("en-US");
@@ -588,15 +591,19 @@ export default function DashboardShell({
     }
     return liveHotspots.error ? "Unavailable" : "No data";
   };
-  const anomalyLabel = summary.data?.label
-    ? summary.data.label.replace("_", " ").replace(/^\w/, (letter) =>
-        letter.toUpperCase()
-      )
-    : summary.error
-      ? "Unavailable"
-      : summary.isLoading
-        ? "Loading baseline"
-        : "No comparison";
+  const anomalyLabel = isCurrentPeriod
+    ? "Live Window in Progress"
+    : summary.data?.label === "unusually_high"
+      ? "Unusually High — Verify Area"
+      : summary.data?.label === "above_baseline"
+        ? "Above Normal — Monitor Closely"
+        : summary.data?.label === "near_baseline"
+          ? "Normal for This Month"
+          : summary.data?.label === "below_baseline"
+            ? "Below Normal Activity"
+            : summary.isLoading
+              ? "Loading baseline"
+              : "Baseline Unavailable";
   const anomalyClass = summary.data?.label ?? "not_calculable";
   return (
     <div className="app-shell">
@@ -630,11 +637,11 @@ export default function DashboardShell({
         <nav className="sidebar-nav" id="dashboard-nav" aria-label="Dashboard sections">
           {dashboardNavItems.map((item) => (
             <Link
-              className={`sidebar-nav-link${activeFeature === item.feature ? " is-active" : ""}`}
+              className={`sidebar-nav-link${resolvedFeature === item.feature ? " is-active" : ""}`}
               href={item.href}
               key={item.href}
               title={item.label}
-              aria-current={activeFeature === item.feature ? "page" : undefined}
+              aria-current={resolvedFeature === item.feature ? "page" : undefined}
               onClick={() => setIsSidebarOpen(false)}
             >
               <span className="sidebar-icon">
@@ -647,10 +654,10 @@ export default function DashboardShell({
       </aside>
       <div className="app-content">
       <main
-        className={`dashboard-main${activeFeature === "map" ? " dashboard-map-page" : " dashboard-feature-page"}`}
+        className={`dashboard-main${resolvedFeature === "map" ? " dashboard-map-page" : " dashboard-feature-page"}`}
         id="main-content"
       >
-        {activeFeature === "map" && (
+        {resolvedFeature === "map" && (
         <section className="map-workspace" aria-label="Satellite fire map">
           <MapView
             resource={hotspots}
@@ -676,22 +683,24 @@ export default function DashboardShell({
             aria-label="Selected month fire activity summary"
           >
             <article className="map-summary-card">
-              <p className="map-summary-card-label">{summaryMonth} Activity</p>
+              <p className="map-summary-card-label">
+                Total Fire Hotspots ({summaryMonth})
+              </p>
               <strong className="map-summary-card-value">
                 {isCurrentPeriod
                   ? liveCardValue(liveCounts?.harmonized)
                   : formatSummaryNumber(summary, summary.data?.currentCount)}
               </strong>
               <span className="map-summary-card-detail">
-                {summaryRegion} · {activityMetricDetail}
+                {summaryRegion} · Combined satellite heat detections
               </span>
               <span className="map-summary-card-disclaimer">
-                Decision Support Intelligence • Non-Predictive Alert
+                Satellite heat detections • Verify on ground with BFP
               </span>
             </article>
             <article className="map-summary-card">
               <p className="map-summary-card-label">
-                VIIRS Active-Fire (375m)
+                Small-Area Sensor (VIIRS 375m)
               </p>
               <strong className="map-summary-card-value">
                 {isCurrentPeriod
@@ -702,17 +711,15 @@ export default function DashboardShell({
                     )}
               </strong>
               <span className="map-summary-card-detail">
-                {isCurrentPeriod
-                  ? "Live FIRMS active cell-days"
-                  : "Raw active cell-days"}
+                High-detail sensor • Detects smaller brush &amp; field fires
               </span>
               <span className="map-summary-card-disclaimer">
-                Decision Support Intelligence • Non-Predictive Alert
+                Each count = 1 active grid area per day
               </span>
             </article>
             <article className="map-summary-card">
               <p className="map-summary-card-label">
-                MODIS Active-Fire (1km)
+                Wide-Area Sensor (MODIS 1km)
               </p>
               <strong className="map-summary-card-value">
                 {isCurrentPeriod
@@ -723,44 +730,44 @@ export default function DashboardShell({
                     )}
               </strong>
               <span className="map-summary-card-detail">
-                {isCurrentPeriod
-                  ? "Live FIRMS active cell-days"
-                  : "Raw active cell-days"}
+                Long-term sensor • 20+ year historical archive
               </span>
               <span className="map-summary-card-disclaimer">
-                Decision Support Intelligence • Non-Predictive Alert
+                Each count = 1 active grid area per day
               </span>
             </article>
             <article className="map-summary-card">
               <p className="map-summary-card-label">
-                {summaryMonth} Historical Median
+                Typical {summaryMonth} Baseline (Median)
               </p>
               <strong className="map-summary-card-value">
                 {formatSummaryNumber(summary, summary.data?.historicalMedian)}
               </strong>
               <span className="map-summary-card-detail">
-                Baseline: {baselineDetail}
+                Normal level for {summaryMonth} ({baselineDetail})
               </span>
               <span className="map-summary-card-disclaimer">
-                Decision Support Intelligence • Non-Predictive Alert
+                Middle value of past years for this same month
               </span>
             </article>
             <article
               className={`map-summary-card map-summary-card-anomaly map-summary-card-anomaly-${anomalyClass}`}
             >
-              <p className="map-summary-card-label">Anomaly vs. Median</p>
+              <p className="map-summary-card-label">
+                Comparison vs. Typical Month
+              </p>
               <strong className="map-summary-card-value">
                 {isCurrentPeriod
-                  ? "Not available"
+                  ? "Live Period"
                   : formatAnomalyPercent(summary, summary.data?.anomalyPercent)}
               </strong>
               <span
                 className={`map-summary-status map-summary-status-${anomalyClass}`}
               >
-                {isCurrentPeriod ? "Live window is partial" : anomalyLabel}
+                {anomalyLabel}
               </span>
               <span className="map-summary-card-disclaimer">
-                Decision Support Intelligence • Non-Predictive Alert
+                CDRRMO Decision Support • Non-Predictive
               </span>
             </article>
           </section>
@@ -1054,11 +1061,14 @@ export default function DashboardShell({
               <circle cx="12" cy="10" r="2.5" />
             </svg>
           </button>
-          <Link
-            className="map-assistant-trigger"
-            href="/assistant"
-            aria-label="Open Gemini AI assistant"
-            title="Gemini AI assistant"
+          <button
+            type="button"
+            className={`map-assistant-trigger${isAssistantOpen ? " is-open" : ""}`}
+            aria-label="Open CDRRMO Advisory AI"
+            aria-expanded={isAssistantOpen}
+            aria-controls="map-assistant-dock"
+            title="CDRRMO Advisory AI"
+            onClick={() => setIsAssistantOpen((open) => !open)}
           >
             <svg
               viewBox="0 0 24 24"
@@ -1072,20 +1082,30 @@ export default function DashboardShell({
               <path d="M12 22c4.4 0 7.5-3.1 7.5-7.4 0-3.5-2-6.5-4.7-8.9-.2 2.3-1.1 3.8-2.8 5.2-.3-3.5-2.2-6.7-5.3-8.8.5 4.1-2.2 6.4-2.2 11.3C4.5 18.2 7.6 22 12 22Z" />
               <path d="M12 20c-1.6 0-2.8-1.2-2.8-2.9 0-1.5 1-2.4 2.5-3.8.5 1.4 1.3 2.1 2.1 2.8.9 1.6.1 3.9-1.8 3.9Z" />
             </svg>
-            <span>Gemini AI</span>
-          </Link>
+            <span>CDRRMO Advisory AI</span>
+          </button>
+          <div
+            id="map-assistant-dock"
+            className={`map-assistant-dock${isAssistantOpen ? " is-open" : ""}`}
+            aria-hidden={!isAssistantOpen}
+          >
+            <AssistantPanel
+              summary={summary.data ?? null}
+              onClose={() => setIsAssistantOpen(false)}
+            />
+          </div>
         </section>
         )}
-        {activeFeature !== "map" && (
+        {resolvedFeature !== "map" && (
           <section
             className={`dashboard-secondary feature-page${
-              activeFeature === "calendar" ? " calendar-feature-page" : ""
+              resolvedFeature === "calendar" ? " calendar-feature-page" : ""
             }`}
             data-calendar-theme={
-              activeFeature === "calendar" ? calendarTheme : undefined
+              resolvedFeature === "calendar" ? calendarTheme : undefined
             }
           >
-            {activeFeature === "calendar" ? (
+            {resolvedFeature === "calendar" ? (
               <header className="calendar-command-bar">
                 <div className="calendar-command-title">
                   <h1 className="feature-page-title">Activity Calendar</h1>
@@ -1220,7 +1240,7 @@ export default function DashboardShell({
                 <h1 className="feature-page-title">
                   {
                     dashboardNavItems.find(
-                      (item) => item.feature === activeFeature
+                      (item) => item.feature === resolvedFeature
                     )?.label
                   }
                 </h1>
@@ -1304,7 +1324,7 @@ export default function DashboardShell({
                 </div>
               </>
             )}
-            {activeFeature === "calendar" && (
+            {resolvedFeature === "calendar" && (
               <ActivityCalendar
                 resource={calendar}
                 selectedYear={periodRange?.year ?? null}
@@ -1312,19 +1332,22 @@ export default function DashboardShell({
                 onSelectMonth={handleSelectMonth}
               />
             )}
-            {activeFeature === "anomaly" && (
+            {resolvedFeature === "anomaly" && (
               <div className="analytics-stack">
                 <AnomalyPanel resource={summary} />
                 <HarmonizationPanel resource={harmonization} />
                 <OverlapChart resource={harmonization} />
               </div>
             )}
-            {activeFeature === "assistant" && (
-              <AssistantPanel summary={summary.data ?? null} />
-            )}
-            {activeFeature === "export" &&
+            {resolvedFeature === "export" &&
               (hotspotFilters ? (
-                <ExportButton filters={hotspotFilters} metric={metric} />
+                <ExportButton
+                  filters={hotspotFilters}
+                  metric={metric}
+                  regionName={selectedRegion?.name}
+                  year={periodRange?.year}
+                  month={periodRange?.month}
+                />
               ) : (
                 <section
                   className="export-unavailable-card"
@@ -1346,7 +1369,7 @@ export default function DashboardShell({
             </footer>
           </section>
         )}
-        {activeFeature === "map" && (
+        {resolvedFeature === "map" && (
         <div className="dashboard-secondary">
         <section
           className={`data-state-panel${dataErrors.length ? " data-state-error" : ""}`}

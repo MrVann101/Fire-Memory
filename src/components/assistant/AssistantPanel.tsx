@@ -16,16 +16,31 @@ interface AiErrorResponse {
 
 interface AssistantPanelProps {
   summary: AnalyticsSummaryForAi | null;
+  onClose?: () => void;
 }
 
 const SUGGESTED_QUESTIONS = [
-  "Explain this month's hotspot activity compared with previous years.",
-  "How does the current count compare with the historical median?",
-  "What limitations should I consider when interpreting this result?",
+  "What does this month's hotspot count vs. historical median mean for CDRRMO monitoring?",
+  "How should our CDRRMO interpret the VIIRS and MODIS detections for this period?",
+  "What data limitations should we note in our LGU situational briefing?",
 ];
 
 const DEFAULT_DISCLAIMER =
-  "AI interpretation only. Satellite detections are not confirmed fires, forecasts, or emergency instructions. Verify important decisions with official sources.";
+  "CDRRMO Advisory AI interpretation only. Satellite detections are not confirmed fires, forecasts, or emergency instructions. Coordinate field verification and operational decisions through official CDRRMO, BFP, and LGU incident command channels.";
+
+function formatAdvisoryAnswer(text: string) {
+  const parts = text.split(/(Computed values:|Interpretation:|Limitations:)/gi);
+  return parts.map((part, index) => {
+    if (/^(Computed values:|Interpretation:|Limitations:)$/i.test(part)) {
+      return (
+        <strong key={index} className="assistant-section-heading">
+          {part}
+        </strong>
+      );
+    }
+    return <span key={index}>{part}</span>;
+  });
+}
 
 function isAiBriefResponse(value: unknown): value is AiBriefResponse {
   if (typeof value !== "object" || value === null) {
@@ -48,7 +63,7 @@ function getErrorMessage(value: unknown): string | null {
   return typeof message === "string" && message.length > 0 ? message : null;
 }
 
-export function AssistantPanel({ summary }: AssistantPanelProps) {
+export function AssistantPanel({ summary, onClose }: AssistantPanelProps) {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState<string | null>(null);
   const [disclaimer, setDisclaimer] = useState(DEFAULT_DISCLAIMER);
@@ -136,16 +151,34 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
       className="assistant-panel"
     >
       <div className="assistant-header">
-        <p className="assistant-eyebrow">
-          Feature 04 · Gemini AI
-        </p>
-        <h2 id="assistant-panel-title" className="assistant-title">
-          Gemini AI assistant
-        </h2>
+        <div className="assistant-header-top">
+          <div>
+            <p className="assistant-eyebrow">
+              CDRRMO DECISION SUPPORT · GEMINI AI
+            </p>
+            <h2 id="assistant-panel-title" className="assistant-title">
+              CDRRMO Fire Advisory Assistant
+            </h2>
+          </div>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close CDRRMO Advisory AI"
+              className="assistant-close-button"
+            >
+              ×
+            </button>
+          ) : null}
+        </div>
         <p className="assistant-intro">
-          Get an explanation of the selected fire-activity data and historical
-          comparison.
+          Data-grounded situational analysis and monitoring guidance for City &amp; Municipal DRRM Offices.
         </p>
+        {summary ? (
+          <div className="assistant-context-pill" aria-label="Active advisory scope">
+            {summary.region.name} · {summary.period.year}-{String(summary.period.month).padStart(2, "0")}
+          </div>
+        ) : null}
       </div>
 
       <div className="assistant-suggestions" aria-label="Suggested questions">
@@ -164,7 +197,7 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
 
       <form className="assistant-form" onSubmit={submitQuestion}>
         <label htmlFor="assistant-question" className="sr-only">
-          Question for the AI interpretation
+          Question for the CDRRMO Advisory AI
         </label>
         <textarea
           id="assistant-question"
@@ -172,7 +205,7 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
           onChange={(event) => setQuestion(event.target.value)}
           maxLength={AI_MAX_QUESTION_LENGTH}
           rows={3}
-          placeholder="Ask a question about the selected region and period"
+          placeholder="Ask a CDRRMO monitoring or situational question about the selected region and period"
           className="assistant-question"
           aria-describedby="assistant-question-help assistant-error"
           disabled={isLoading || !summary}
@@ -186,7 +219,7 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
             disabled={isLoading || !summary}
             className="assistant-submit"
           >
-            {isLoading ? "Interpreting..." : "Ask Gemini"}
+            {isLoading ? "Generating advisory..." : "Get CDRRMO Advisory"}
           </button>
         </div>
       </form>
@@ -205,23 +238,23 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
         aria-live="polite"
         className="assistant-answer"
       >
-        <h3 className="assistant-answer-title">Data explanation</h3>
+        <h3 className="assistant-answer-title">CDRRMO Situational Advisory</h3>
         {isLoading ? (
           <p className="assistant-answer-copy">
-            Preparing an interpretation from the supplied analytics...
+            Preparing a CDRRMO situational advisory from the supplied analytics...
           </p>
         ) : answer ? (
           <p className="assistant-answer-copy assistant-answer-result">
-            {answer}
+            {formatAdvisoryAnswer(answer)}
           </p>
         ) : !summary ? (
           <p className="assistant-answer-copy">
-            Select a region and month to enable explanations grounded in the
+            Select a region and month to enable CDRRMO advisories grounded in the
             dashboard analytics.
           </p>
         ) : (
           <p className="assistant-answer-copy">
-            Ask a question to receive a data-grounded interpretation.
+            Ask a question to receive a data-grounded CDRRMO situational advisory.
           </p>
         )}
       </div>
