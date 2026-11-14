@@ -11,6 +11,33 @@ import type {
 } from "@/contracts/types";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
 
+type ActivityBand = "low" | "moderate" | "high" | "very-high";
+type BubbleBand = ActivityBand | "no-data";
+const CHILD_BUBBLE_LABEL_MIN_ZOOM = 8;
+
+const BUBBLE_COLORS: Record<BubbleBand, { stroke: string; fill: string }> = {
+  low: { stroke: "#047857", fill: "#10b981" },
+  moderate: { stroke: "#b45309", fill: "#f59e0b" },
+  high: { stroke: "#c2410c", fill: "#f97316" },
+  "very-high": { stroke: "#b91c1c", fill: "#ef4444" },
+  "no-data": { stroke: "#475569", fill: "#64748b" },
+};
+
+function getActivityBand(count: number, maxCount: number): ActivityBand {
+  const relativeCount = maxCount > 0 ? count / maxCount : 0;
+  if (relativeCount < 0.25) return "low";
+  if (relativeCount < 0.5) return "moderate";
+  if (relativeCount < 0.75) return "high";
+  return "very-high";
+}
+
+function getClusterBand(count: number): ActivityBand {
+  if (count >= 100) return "very-high";
+  if (count >= 50) return "high";
+  if (count >= 10) return "moderate";
+  return "low";
+}
+
 function displayValue(value: string | number | null): string {
   return value === null ? "Not available" : String(value);
 }
@@ -58,6 +85,19 @@ function DetectionLayer({ hotspots }: { hotspots: Hotspot[] }) {
       chunkDelay: 20,
       maxClusterRadius: 48,
       showCoverageOnHover: false,
+      iconCreateFunction: (cluster) => {
+        const count = cluster.getChildCount();
+        const band = getClusterBand(count);
+        const size =
+          count >= 100 ? 36 : count >= 50 ? 32 : count >= 10 ? 28 : 24;
+
+        return L.divIcon({
+          className: `telemetry-cluster telemetry-cluster--${band}`,
+          html: `<span>${count.toLocaleString("en-US")}</span>`,
+          iconSize: [size, size],
+          iconAnchor: [size / 2, size / 2],
+        });
+      },
     });
 
     for (const hotspot of hotspots) {
@@ -113,6 +153,7 @@ function ChildBubbleLayer({
 
   useEffect(() => {
     const layer = L.layerGroup();
+    const bubbles: L.CircleMarker[] = [];
     const maxCount = childCounts.reduce(
       (max, child) => Math.max(max, child.count ?? 0),
       0
@@ -130,17 +171,22 @@ function ChildBubbleLayer({
       const longitude = (minLongitude + maxLongitude) / 2;
       const radius =
         child.count === null || maxCount === 0
-          ? 9
-          : 8 + Math.sqrt(child.count / maxCount) * 9;
+          ? 5
+          : 5 + Math.sqrt(child.count / maxCount) * 4;
       const countLabel =
         child.count === null
           ? "No data"
           : `${child.count.toLocaleString("en-US")} detections`;
+      const band =
+        child.count === null
+          ? "no-data"
+          : getActivityBand(child.count, maxCount);
+      const colors = BUBBLE_COLORS[band];
       const bubble = L.circleMarker([latitude, longitude], {
         radius,
-        color: "#143f50",
-        weight: 2,
-        fillColor: "#368d85",
+        color: colors.stroke,
+        weight: 1.5,
+        fillColor: colors.fill,
         fillOpacity: 0.78,
         bubblingMouseEvents: false,
       });
@@ -174,8 +220,10 @@ function ChildBubbleLayer({
         });
       });
 
-      bubble.bindTooltip(`${child.name}: ${countLabel}`, {
-        direction: "top",
+      bubble.bindTooltip(child.name, {
+        permanent: map.getZoom() >= CHILD_BUBBLE_LABEL_MIN_ZOOM,
+        direction: "right",
+        offset: [8, 0],
         className: "province-bubble-label",
       });
       bubble.bindPopup(
@@ -186,10 +234,38 @@ function ChildBubbleLayer({
       );
       bubble.on("click", () => onSelectRegion(child.regionId));
       layer.addLayer(bubble);
+      bubbles.push(bubble);
     }
 
     map.addLayer(layer);
+    const syncBubbleLabels = () => {
+      const mapSize = map.getSize();
+      for (const bubble of bubbles) {
+        const tooltip = bubble.getTooltip();
+        if (!tooltip) {
+          continue;
+        }
+        const point = map.latLngToContainerPoint(bubble.getLatLng());
+        const showLabel =
+          map.getZoom() >= CHILD_BUBBLE_LABEL_MIN_ZOOM &&
+          point.x >= 4 &&
+          point.x <= mapSize.x - 176 &&
+          point.y >= 168 &&
+          point.y <= mapSize.y - 20;
+        tooltip.options.permanent = showLabel;
+        if (showLabel) {
+          bubble.openTooltip();
+        } else {
+          bubble.closeTooltip();
+        }
+      }
+    };
+    map.on("zoomend", syncBubbleLabels);
+    map.on("moveend", syncBubbleLabels);
+    syncBubbleLabels();
     return () => {
+      map.off("zoomend", syncBubbleLabels);
+      map.off("moveend", syncBubbleLabels);
       map.removeLayer(layer);
     };
   }, [childCounts, map, onSelectRegion, regions]);
@@ -257,7 +333,7 @@ function RectangleDrawControl({
       }
       start = event.latlng;
       rectangle = L.rectangle(L.latLngBounds(start, start), {
-        color: "#bd4e2f",
+        color: "#f97316",
         weight: 2,
         dashArray: "6 4",
         fillOpacity: 0.12,

@@ -545,6 +545,9 @@ export default function DashboardShell({
               <span className="map-summary-card-detail">
                 {summaryRegion} · {activityMetricDetail}
               </span>
+              <span className="map-summary-card-disclaimer">
+                Decision Support Intelligence • Non-Predictive Alert
+              </span>
             </article>
             <article className="map-summary-card">
               <p className="map-summary-card-label">
@@ -558,6 +561,9 @@ export default function DashboardShell({
               </strong>
               <span className="map-summary-card-detail">
                 Raw active cell-days
+              </span>
+              <span className="map-summary-card-disclaimer">
+                Decision Support Intelligence • Non-Predictive Alert
               </span>
             </article>
             <article className="map-summary-card">
@@ -573,6 +579,9 @@ export default function DashboardShell({
               <span className="map-summary-card-detail">
                 Raw active cell-days
               </span>
+              <span className="map-summary-card-disclaimer">
+                Decision Support Intelligence • Non-Predictive Alert
+              </span>
             </article>
             <article className="map-summary-card">
               <p className="map-summary-card-label">
@@ -584,8 +593,13 @@ export default function DashboardShell({
               <span className="map-summary-card-detail">
                 Baseline: {baselineDetail}
               </span>
+              <span className="map-summary-card-disclaimer">
+                Decision Support Intelligence • Non-Predictive Alert
+              </span>
             </article>
-            <article className="map-summary-card map-summary-card-anomaly">
+            <article
+              className={`map-summary-card map-summary-card-anomaly map-summary-card-anomaly-${anomalyClass}`}
+            >
               <p className="map-summary-card-label">Anomaly vs. Median</p>
               <strong className="map-summary-card-value">
                 {formatAnomalyPercent(summary, summary.data?.anomalyPercent)}
@@ -594,6 +608,9 @@ export default function DashboardShell({
                 className={`map-summary-status map-summary-status-${anomalyClass}`}
               >
                 {anomalyLabel}
+              </span>
+              <span className="map-summary-card-disclaimer">
+                Decision Support Intelligence • Non-Predictive Alert
               </span>
             </article>
           </section>
@@ -835,10 +852,10 @@ export default function DashboardShell({
           <button
             type="button"
             className="map-region-trigger"
-            aria-label="Choose region"
+            aria-label="Choose location"
             aria-controls="map-filter-panel"
             aria-expanded={isFilterPopoverOpen}
-            title="Choose region"
+            title="Choose location"
             onClick={() => {
               setIsFilterPopoverPinned((isPinned) => !isPinned);
               setIsAssistantOpen(false);
@@ -856,6 +873,7 @@ export default function DashboardShell({
               <path d="M20 10c0 5-8 12-8 12S4 15 4 10a8 8 0 1 1 16 0Z" />
               <circle cx="12" cy="10" r="2.5" />
             </svg>
+            <span>Location</span>
           </button>
           <button
             type="button"

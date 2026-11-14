@@ -104,20 +104,20 @@ export function ExportButton({
   return (
     <section
       aria-labelledby="export-controls-title"
-      className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"
+      className="export-card"
     >
-      <h2 id="export-controls-title" className="text-lg font-semibold text-slate-950">
+      <h2 id="export-controls-title" className="export-title">
         Export data
       </h2>
-      <p className="mt-1 text-sm text-slate-600">
+      <p className="export-description">
         Downloads use the dashboard&apos;s active region, date, and metric filters.
       </p>
-      <div className="mt-4 flex flex-wrap gap-3">
+      <div className="export-actions">
         <button
           type="button"
           onClick={() => exportFile("hotspots")}
           disabled={activeExport !== null}
-          className="rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-800 transition hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="export-button export-button-secondary"
         >
           {activeExport === "hotspots" ? "Preparing..." : "Hotspot CSV"}
         </button>
@@ -125,13 +125,13 @@ export function ExportButton({
           type="button"
           onClick={() => exportFile("analytics")}
           disabled={activeExport !== null}
-          className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          className="export-button export-button-primary"
         >
           {activeExport === "analytics" ? "Preparing..." : "Analytics CSV"}
         </button>
       </div>
       {message ? (
-        <p role="status" className="mt-3 text-sm text-slate-600">
+        <p role="status" className="export-message">
           {message}
         </p>
       ) : null}
