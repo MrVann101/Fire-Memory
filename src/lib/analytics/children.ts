@@ -13,6 +13,9 @@ export async function getChildCounts(
   month: number,
   metric: Metric
 ): Promise<ChildCount[]> {
+  if (regionId === "custom") {
+    return [];
+  }
   const region = await requireRegion(regionId);
 
   // Provinces return an empty array per contract

@@ -95,6 +95,19 @@ describe("Request Validation & Safe Error Responses", () => {
         ),
       AppValidationError
     );
+
+    // Impossible calendar dates (e.g. Feb 30, Apr 31)
+    assert.throws(
+      () =>
+        validateHotspotSearchParams(
+          new URLSearchParams({
+            regionId: "PH-BUK",
+            start: "2026-02-30",
+            end: "2026-03-01",
+          })
+        ),
+      AppValidationError
+    );
   });
 
   it("validates summary, calendar, children, and harmonization query parameters", () => {
