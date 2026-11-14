@@ -326,8 +326,8 @@ missing data into zero.
       explicitly marked `VERIFY`.
 - [x] `data/sample/` contains labeled real sample files and field mapping.
 - [x] Boundaries are WGS84, licensed, simplified, and loadable.
-- [ ] Recent raw import assigns province IDs or reports unassigned rows.
-- [ ] Two identical imports produce no duplicate rows.
+- [x] Recent raw import assigns province IDs or reports unassigned rows.
+- [x] Two identical imports produce no duplicate rows.
 - [ ] `monthly_counts` contains both instruments and coverage flags.
 - [ ] `monthly_harmonized` flags all MODIS-converted months.
 - [ ] Factors contain method, scope, overlap years, correlation, and error.

@@ -159,6 +159,53 @@ normalizer mirrors the `Hotspot` definition in the locked work-plan contract
 and does not edit or create a shared contract file; integration should check
 the type against the contract when that file is supplied.
 
+## Recent raw window
+
+`scripts/ingest/ingest.ts` filters normalized source records to an explicit
+date window, assigns ADM2 regions with bbox pre-filtering followed by
+point-in-polygon checks, preserves the original instrument/confidence and
+source row, and writes deterministic JSONL in batches plus a count report.
+The chosen window is 2024-01-01 through 2025-12-31, the two latest calendar
+years represented in the supplied downloads. This is a local fallback, not
+a current FIRMS window: the files contain no 2026 detections and end on
+2025-12-31. The Member 2 migration and database connection are not
+available in this checkout, so no Supabase rows were inserted.
+
+Compile and run from the repository root in PowerShell:
+
+```powershell
+npx tsc --target es2022 --module commonjs --moduleResolution node `
+  --strict --esModuleInterop --skipLibCheck --types node `
+  --outDir data/processed/.compiled `
+  scripts/ingest/ingest.ts scripts/ingest/normalize.ts `
+  scripts/ingest/load-regions.ts
+node data/processed/.compiled/ingest.js `
+  --modis data/raw/modis/modis_2024_Philippines.csv `
+  --modis data/raw/modis/modis_2025_Philippines.csv `
+  --viirs data/raw/viirs-noaa20/viirs-jpss1_2024_Philippines.csv `
+  --viirs data/raw/viirs-noaa20/viirs-jpss1_2025_Philippines.csv `
+  --start 2024-01-01 --end 2025-12-31 `
+  --output data/processed/raw-window-2024-01-01-to-2025-12-31.jsonl
+```
+
+The local run read 63,386 rows from the four source files (8,306 MODIS and
+55,080 VIIRS), accepted 63,386 unique records, and found zero invalid rows,
+duplicate rows, or records outside the requested window. Of the accepted
+points, 62,999 received a province ID, 223 received a retained non-province
+ADM2 region ID (city/NCR district), and 164 were unassigned because no
+unique ADM2 polygon matched. Thus, unassigned includes ambiguous boundary
+matches as well as points outside the selected ADM2 polygons; it is not
+limited to coastal detections. The report includes per-file counts and
+per-month/instrument, assignment, and duplicate counts. A month absent from
+the detection counts is not evidence that the instrument had no coverage.
+Re-running the same import produced byte-for-byte identical JSONL and
+report files (JSONL SHA-256
+`AB39DE54CD7548B05798DC5144C6FE304220CF560F8DAC63D4AD7E347D3123E7`).
+The local output and compiled scripts are ignored under `data/processed/`;
+`databaseRowsInserted` is zero until the database migration and access are
+available. A failed parse or invalid normalized record stops the run with
+an error instead of being silently dropped.
+
 ## Administrative boundaries
 
 The country and ADM2 GeoJSON inputs are documented in
