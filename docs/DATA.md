@@ -59,6 +59,8 @@ The VIIRS CSV header is
 `latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight,type`.
 The filenames and row fields are evidence about these local files only; they
 do not replace the missing archive manifest or FIRMS coverage metadata.
+Small real-row fixtures and their source/field mapping are provided in
+[`data/sample/README.md`](../data/sample/README.md).
 
 ## Products and published date coverage
 
