@@ -3,6 +3,7 @@ import type {
   Hotspot,
   HotspotFilters,
   HotspotsResponse,
+  HotspotWindowResponse,
   Instrument,
 } from "@/contracts/types";
 import hotspotsMock from "@/mocks/hotspots.json";
@@ -16,6 +17,66 @@ import { AppValidationError } from "./validation";
 
 export const DEFAULT_HOTSPOT_LIMIT = 2000;
 export const MAX_HOTSPOT_LIMIT = 10000;
+
+async function queryHotspotWindow(
+  supabase = getSupabaseServerClient()
+): Promise<HotspotWindowResponse> {
+  const [minResult, maxResult, updatedResult] = await Promise.all([
+    supabase
+      .from("hotspots")
+      .select("acquisition_datetime")
+      .order("acquisition_datetime", { ascending: true })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("hotspots")
+      .select("acquisition_datetime")
+      .order("acquisition_datetime", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+    supabase
+      .from("hotspots")
+      .select("ingested_at")
+      .order("ingested_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  if (minResult.error || maxResult.error || updatedResult.error) {
+    throw new DatabaseProviderError("Failed to retrieve hotspot data window.");
+  }
+
+  const rawWindow =
+    minResult.data?.acquisition_datetime &&
+    maxResult.data?.acquisition_datetime
+      ? {
+          start: new Date(minResult.data.acquisition_datetime)
+            .toISOString()
+            .slice(0, 10),
+          end: new Date(maxResult.data.acquisition_datetime)
+            .toISOString()
+            .slice(0, 10),
+        }
+      : null;
+
+  return {
+    rawWindow,
+    lastUpdated: updatedResult.data?.ingested_at
+      ? new Date(updatedResult.data.ingested_at).toISOString()
+      : null,
+  };
+}
+
+export async function getHotspotWindow(): Promise<HotspotWindowResponse> {
+  if (isMocksEnabled()) {
+    return {
+      rawWindow: hotspotsMock.rawWindow,
+      lastUpdated: hotspotsMock.lastUpdated,
+    };
+  }
+
+  return queryHotspotWindow();
+}
 
 interface HotspotRow {
   id: string;
@@ -225,42 +286,7 @@ export async function queryHotspots(
     return query;
   };
 
-  // 1. Fetch global rawWindow & lastUpdated metadata
-  const [{ data: minRow }, { data: maxRow }, { data: updRow }] =
-    await Promise.all([
-      supabase
-        .from("hotspots")
-        .select("acquisition_datetime")
-        .order("acquisition_datetime", { ascending: true })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("hotspots")
-        .select("acquisition_datetime")
-        .order("acquisition_datetime", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-      supabase
-        .from("hotspots")
-        .select("ingested_at")
-        .order("ingested_at", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ]);
-
-  const rawWindow =
-    minRow?.acquisition_datetime && maxRow?.acquisition_datetime
-      ? {
-          start: new Date(minRow.acquisition_datetime)
-            .toISOString()
-            .slice(0, 10),
-          end: new Date(maxRow.acquisition_datetime).toISOString().slice(0, 10),
-        }
-      : null;
-
-  const lastUpdated = updRow?.ingested_at
-    ? new Date(updRow.ingested_at).toISOString()
-    : null;
+  const { rawWindow, lastUpdated } = await queryHotspotWindow(supabase);
 
   // 2. Count exact matching rows
   const countQuery = applyFilters(

@@ -12,6 +12,7 @@ import {
   getChildren,
   getHarmonization,
   getHotspots,
+  getHotspotWindow,
   getRegions,
 } from "@/lib/client/api";
 import { useClientResource } from "./useClientResource";
@@ -25,6 +26,14 @@ type ChildrenQuery = Pick<
 export function useRegions() {
   const request = useCallback((signal: AbortSignal) => getRegions(signal), []);
   return useClientResource("regions", request, 0);
+}
+
+export function useHotspotWindow() {
+  const request = useCallback(
+    (signal: AbortSignal) => getHotspotWindow(signal),
+    []
+  );
+  return useClientResource("hotspot-window", request, 0);
 }
 
 export function useHotspots(

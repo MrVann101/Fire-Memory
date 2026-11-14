@@ -15,7 +15,7 @@ interface AiErrorResponse {
 }
 
 interface AssistantPanelProps {
-  summary: AnalyticsSummaryForAi;
+  summary: AnalyticsSummaryForAi | null;
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -68,6 +68,11 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
   async function submitQuestion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedQuestion = question.trim();
+
+    if (!summary) {
+      setError("Select a region and month before asking for a data explanation.");
+      return;
+    }
 
     if (trimmedQuestion.length === 0) {
       setError("Enter a question or choose one of the suggested questions.");
@@ -132,14 +137,14 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
     >
       <div className="mb-4">
         <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-          AI interpretation
+          Feature 04 · Gemini AI
         </p>
         <h2 id="assistant-panel-title" className="mt-1 text-xl font-semibold text-slate-950">
-          Ask about the selected analytics
+          Gemini AI assistant
         </h2>
         <p className="mt-2 text-sm text-slate-600">
-          The assistant explains the supplied summary; it does not add
-          observations or make emergency decisions.
+          Get an explanation of the selected fire-activity data and historical
+          comparison.
         </p>
       </div>
 
@@ -149,6 +154,7 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
             key={suggestedQuestion}
             type="button"
             onClick={() => chooseSuggestedQuestion(suggestedQuestion)}
+            disabled={!summary || isLoading}
             className="rounded-full border border-slate-300 px-3 py-2 text-left text-xs text-slate-700 transition hover:border-slate-500 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2"
           >
             {suggestedQuestion}
@@ -169,7 +175,7 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
           placeholder="Ask a question about the selected region and period"
           className="w-full resize-y rounded-xl border border-slate-300 px-3 py-3 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-slate-500 focus:ring-2 focus:ring-slate-500"
           aria-describedby="assistant-question-help assistant-error"
-          disabled={isLoading}
+          disabled={isLoading || !summary}
         />
         <div className="mt-2 flex items-center justify-between gap-3">
           <p id="assistant-question-help" className="text-xs text-slate-500">
@@ -177,10 +183,10 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
           </p>
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || !summary}
             className="rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {isLoading ? "Interpreting..." : "Ask assistant"}
+            {isLoading ? "Interpreting..." : "Ask Gemini"}
           </button>
         </div>
       </form>
@@ -200,7 +206,7 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
         className="mt-5 rounded-xl border border-slate-200 bg-slate-50 p-4"
       >
         <h3 className="text-sm font-semibold text-slate-900">
-          AI interpretation
+          Data explanation
         </h3>
         {isLoading ? (
           <p className="mt-2 text-sm text-slate-600">
@@ -209,6 +215,11 @@ export function AssistantPanel({ summary }: AssistantPanelProps) {
         ) : answer ? (
           <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">
             {answer}
+          </p>
+        ) : !summary ? (
+          <p className="mt-2 text-sm text-slate-600">
+            Select a region and month to enable explanations grounded in the
+            dashboard analytics.
           </p>
         ) : (
           <p className="mt-2 text-sm text-slate-600">

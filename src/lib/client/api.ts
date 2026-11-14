@@ -7,6 +7,7 @@ import type {
   Hotspot,
   HotspotFilters,
   HotspotsResponse,
+  HotspotWindowResponse,
   Instrument,
   Region,
 } from "@/contracts/types";
@@ -252,6 +253,20 @@ export async function getHotspots(
   params.set("limit", String(limit));
 
   return fetchJson<HotspotsResponse>(`/api/hotspots?${params}`, signal);
+}
+
+export async function getHotspotWindow(
+  signal?: AbortSignal
+): Promise<HotspotWindowResponse> {
+  if (USE_MOCKS) {
+    assertSimulatedFixture(hotspotsFixture._simulated, "Hotspots");
+    return {
+      rawWindow: hotspotsFixture.rawWindow,
+      lastUpdated: hotspotsFixture.lastUpdated,
+    };
+  }
+
+  return fetchJson<HotspotWindowResponse>("/api/hotspots/window", signal);
 }
 
 export async function getAnalyticsSummary(

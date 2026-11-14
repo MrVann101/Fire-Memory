@@ -175,7 +175,6 @@ function ChildBubbleLayer({
       });
 
       bubble.bindTooltip(`${child.name}: ${countLabel}`, {
-        permanent: true,
         direction: "top",
         className: "province-bubble-label",
       });
@@ -311,6 +310,7 @@ export default function LeafletCanvas({
   selectedRegion,
   childCounts,
   regions,
+  imageryDate,
   onSelectRegion,
   drawRectangle,
   onRectangleComplete,
@@ -319,6 +319,7 @@ export default function LeafletCanvas({
   selectedRegion: Region | null;
   childCounts: ChildCount[];
   regions: Region[];
+  imageryDate: string | null;
   onSelectRegion: (regionId: string) => void;
   drawRectangle: boolean;
   onRectangleComplete: (bbox: BBox) => void;
@@ -333,10 +334,26 @@ export default function LeafletCanvas({
       className="leaflet-map"
       aria-label="Map centered on the Philippines"
     >
+      {imageryDate && (
+        <TileLayer
+          attribution='<a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/global-imagery-browse-services-gibs">NASA EOSDIS GIBS</a> · VIIRS Suomi-NPP'
+          url={`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${imageryDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`}
+          maxZoom={18}
+          maxNativeZoom={9}
+        />
+      )}
       <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        maxZoom={19}
+        attribution="NASA EOSDIS GIBS · Reference features"
+        url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Features_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png"
+        maxZoom={18}
+        maxNativeZoom={13}
+        opacity={0.75}
+      />
+      <TileLayer
+        attribution="NASA EOSDIS GIBS · Reference labels"
+        url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Labels_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png"
+        maxZoom={18}
+        maxNativeZoom={13}
       />
       <RegionViewport region={selectedRegion} />
       <DetectionLayer hotspots={hotspots} />
