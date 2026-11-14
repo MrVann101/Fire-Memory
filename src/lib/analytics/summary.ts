@@ -5,7 +5,7 @@ import type {
   Instrument,
 } from "@/contracts/types";
 import summariesMock from "@/mocks/summaries.json";
-import { requireRegion } from "@/lib/db/regions";
+import { requireRegion, requireRegionWithDbId } from "@/lib/db/regions";
 import {
   DatabaseProviderError,
   getSupabaseServerClient,
@@ -60,29 +60,47 @@ function computeMedianInArray(values: number[]): number | null {
 }
 
 async function getMockSummary(query: AnalyticsQuery): Promise<AnalyticsSummary> {
+  const effectiveInstrument: Instrument | "ALL" =
+    query.metric === "harmonized" ? "ALL" : (query.instrument ?? "ALL");
+
   if (query.regionId === "custom") {
+    const base = summariesMock.customArea as AnalyticsSummary;
     return {
-      ...(summariesMock.customArea as AnalyticsSummary),
+      ...base,
       period: { year: query.year, month: query.month },
       metric: query.metric,
-      instrument:
-        query.metric === "harmonized" ? "ALL" : (query.instrument ?? "ALL"),
+      instrument: effectiveInstrument,
+      currentIsEstimated:
+        query.metric === "harmonized" ? base.currentIsEstimated : false,
+      estimatedBaselineYears:
+        query.metric === "harmonized" ? base.estimatedBaselineYears : [],
+      harmonization: query.metric === "harmonized" ? base.harmonization : null,
     };
   }
-  if (query.regionId === "PH-BAT") {
+  const region = await requireRegion(query.regionId);
+  if (region.id === "PH-BAT" || region.name === "Batanes") {
+    const base = summariesMock.zeroBaseline as AnalyticsSummary;
     return {
-      ...(summariesMock.zeroBaseline as AnalyticsSummary),
+      ...base,
+      region: { id: region.id, name: region.name, level: region.level },
       period: { year: query.year, month: query.month },
+      metric: query.metric,
+      instrument: effectiveInstrument,
+      currentIsEstimated:
+        query.metric === "harmonized" ? base.currentIsEstimated : false,
+      estimatedBaselineYears:
+        query.metric === "harmonized" ? base.estimatedBaselineYears : [],
+      harmonization: query.metric === "harmonized" ? base.harmonization : null,
     };
   }
   if (query.metric === "raw") {
     return {
       ...(summariesMock.rawSummary as AnalyticsSummary),
+      region: { id: region.id, name: region.name, level: region.level },
       period: { year: query.year, month: query.month },
-      instrument: query.instrument ?? "ALL",
+      instrument: effectiveInstrument,
     };
   }
-  const region = await requireRegion(query.regionId);
   return {
     ...(summariesMock.harmonizedWithEstimated as AnalyticsSummary),
     region: { id: region.id, name: region.name, level: region.level },
@@ -94,21 +112,62 @@ async function getCustomAreaSummary(
   query: AnalyticsQuery,
   bbox: BBox,
   effectiveInstrument: Instrument | "ALL",
-  currentUtcYear: number
+  currentUtcYear: number,
+  regionOverride?: AnalyticsSummary["region"]
 ): Promise<AnalyticsSummary> {
   const supabase = getSupabaseServerClient();
   const harmonization =
     query.metric === "harmonized"
-      ? await getHarmonizationInfoForRegion("custom")
+      ? await getHarmonizationInfoForRegion(
+          regionOverride ? regionOverride.id : "custom"
+        )
       : null;
+
+  const targetRegion: AnalyticsSummary["region"] = regionOverride ?? {
+    id: "custom",
+    name: `Custom Area (${bbox.map((n) => n.toFixed(2)).join(", ")})`,
+    level: "custom",
+  };
 
   if (
     query.metric === "harmonized" &&
     (!harmonization || harmonization.factor === null)
   ) {
-    throw new DatabaseProviderError(
-      "National harmonization factor is missing; cannot compute custom area harmonized summary."
+    const notes = buildAnalyticsNotes({
+      year: query.year,
+      month: query.month,
+      metric: query.metric,
+      instrument: effectiveInstrument,
+      currentCount: null,
+      currentIsEstimated: false,
+      historicalMedian: null,
+      baselineYears: [],
+      estimatedBaselineYears: [],
+      approximate: true,
+    });
+    notes.push(
+      "National harmonization factor is unavailable; harmonized custom area summary cannot be computed."
     );
+
+    return {
+      region: targetRegion,
+      period: { year: query.year, month: query.month },
+      metric: query.metric,
+      instrument: effectiveInstrument,
+      currentCount: null,
+      currentIsEstimated: false,
+      byInstrument: { MODIS: null, VIIRS: null },
+      baselineYears: [],
+      estimatedBaselineYears: [],
+      historicalMedian: null,
+      anomalyPercent: null,
+      label: "not_calculable",
+      approximate: true,
+      notes,
+      dataCoverage: null,
+      harmonization,
+      lastUpdated: null,
+    };
   }
 
   const { data, error } = await supabase.rpc("get_custom_bbox_calendar", {
@@ -146,11 +205,7 @@ async function getCustomAreaSummary(
     });
 
     return {
-      region: {
-        id: "custom",
-        name: `Custom Area (${bbox.join(", ")})`,
-        level: "custom",
-      },
+      region: targetRegion,
       period: { year: query.year, month: query.month },
       metric: query.metric,
       instrument: effectiveInstrument,
@@ -229,18 +284,35 @@ async function getCustomAreaSummary(
     approximate: true,
   });
 
+  const { data: gridInstrRows } = await supabase
+    .from("monthly_grid_counts")
+    .select("instrument, raw_count")
+    .gte("cell_lon", bbox[0])
+    .lte("cell_lon", bbox[2])
+    .gte("cell_lat", bbox[1])
+    .lte("cell_lat", bbox[3])
+    .eq("year", query.year)
+    .eq("month", query.month);
+
+  let modisGridRaw: number | null = null;
+  let viirsGridRaw: number | null = null;
+  for (const g of gridInstrRows ?? []) {
+    if (g.instrument === "MODIS") {
+      modisGridRaw = (modisGridRaw ?? 0) + g.raw_count;
+    }
+    if (g.instrument === "VIIRS") {
+      viirsGridRaw = (viirsGridRaw ?? 0) + g.raw_count;
+    }
+  }
+
   return {
-    region: {
-      id: "custom",
-      name: `Custom Area (${bbox.map((n) => n.toFixed(2)).join(", ")})`,
-      level: "custom",
-    },
+    region: targetRegion,
     period: { year: query.year, month: query.month },
     metric: query.metric,
     instrument: effectiveInstrument,
     currentCount,
     currentIsEstimated,
-    byInstrument: { MODIS: null, VIIRS: null },
+    byInstrument: { MODIS: modisGridRaw, VIIRS: viirsGridRaw },
     baselineYears,
     estimatedBaselineYears,
     historicalMedian,
@@ -279,14 +351,14 @@ export async function getAnalyticsSummary(
     );
   }
 
-  const region = await requireRegion(query.regionId);
+  const { region, dbId } = await requireRegionWithDbId(query.regionId);
   const supabase = getSupabaseServerClient();
 
   if (query.metric === "harmonized") {
     const [{ data: rpcData, error: rpcError }, { data: rawRows, error: rawError }, harmonization] =
       await Promise.all([
         supabase.rpc("get_harmonized_summary_metrics", {
-          p_region_id: region.id,
+          p_region_id: dbId,
           p_target_year: query.year,
           p_month: query.month,
           p_current_utc_year: currentUtcYear,
@@ -294,7 +366,7 @@ export async function getAnalyticsSummary(
         supabase
           .from("monthly_counts")
           .select("instrument, raw_count, has_coverage")
-          .eq("region_id", region.id)
+          .eq("region_id", dbId)
           .eq("year", query.year)
           .eq("month", query.month)
           .eq("has_coverage", true),
@@ -311,11 +383,41 @@ export async function getAnalyticsSummary(
       | HarmonizedMetricsRpcRow
       | undefined;
 
+    if (region.level === "region" && !row?.first_date) {
+      return getCustomAreaSummary(
+        query,
+        region.bbox,
+        effectiveInstrument,
+        currentUtcYear,
+        { id: region.id, name: region.name, level: region.level }
+      );
+    }
+
+    let effectiveRawRows = rawRows ?? [];
+    if (effectiveRawRows.length === 0 && region.level === "country") {
+      const { data: natRawRows, error: natRawError } = await supabase
+        .from("monthly_counts")
+        .select("instrument, raw_count, has_coverage")
+        .eq("year", query.year)
+        .eq("month", query.month)
+        .eq("has_coverage", true);
+      if (natRawError) {
+        throw new DatabaseProviderError(
+          "Failed to compute national instrument breakdown."
+        );
+      }
+      effectiveRawRows = natRawRows ?? [];
+    }
+
     let modisRaw: number | null = null;
     let viirsRaw: number | null = null;
-    for (const r of rawRows ?? []) {
-      if (r.instrument === "MODIS") modisRaw = r.raw_count;
-      if (r.instrument === "VIIRS") viirsRaw = r.raw_count;
+    for (const r of effectiveRawRows) {
+      if (r.instrument === "MODIS") {
+        modisRaw = (modisRaw ?? 0) + r.raw_count;
+      }
+      if (r.instrument === "VIIRS") {
+        viirsRaw = (viirsRaw ?? 0) + r.raw_count;
+      }
     }
 
     const currentCount =
@@ -386,7 +488,7 @@ export async function getAnalyticsSummary(
   const { data: rpcData, error: rpcError } = await supabase.rpc(
     "get_raw_summary_metrics",
     {
-      p_region_id: region.id,
+      p_region_id: dbId,
       p_target_year: query.year,
       p_month: query.month,
       p_instrument: effectiveInstrument,
@@ -401,6 +503,16 @@ export async function getAnalyticsSummary(
   const row = (Array.isArray(rpcData) ? rpcData[0] : rpcData) as
     | RawMetricsRpcRow
     | undefined;
+
+  if (region.level === "region" && !row?.first_date) {
+    return getCustomAreaSummary(
+      query,
+      region.bbox,
+      effectiveInstrument,
+      currentUtcYear,
+      { id: region.id, name: region.name, level: region.level }
+    );
+  }
 
   const currentCount =
     row?.current_count !== null && row?.current_count !== undefined

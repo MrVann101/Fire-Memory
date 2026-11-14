@@ -22,9 +22,14 @@ establish zero activity or absent VIIRS coverage. No missing month is
 filled with zero.
 
 The outputs are local files in the ignored `data/processed/` directory.
-`databaseLoaded=false`; no rows were inserted into Supabase. Data through
-2025 is not a current window and does not provide the requested full
-history reaching the early 2000s.
+The aggregate and harmonization steps write local files in the ignored
+`data/processed/` directory; their `databaseLoaded=false` field means those
+steps do not write to Supabase. The separate schema-mapped loader seeded all
+six tables on 2026-11-14 and its complete repeat run inserted zero rows.
+The country ID was reconciled to `PH`; detailed database counts and exact
+source comparisons are in [`DATA.md`](./DATA.md#post-load-validation-checked-2026-11-14).
+The files remain limited to 2020-2025, are not a current window, and do not
+provide the requested full history reaching the early 2000s.
 
 ## Calibration method
 
@@ -138,7 +143,7 @@ without additional coverage and validation.
   values are documented implementation choices, not validated
   requirements.
 - Re-run with complete data and independently compare against database
-  counts once Member 2's migration and database access are available.
+  counts once the required Supabase environment variables are available.
 - Keep source confidence and platform provenance unchanged in raw records.
   Active-fire detections are thermal anomalies, not confirmed incidents.
 

@@ -168,8 +168,11 @@ source row, and writes deterministic JSONL in batches plus a count report.
 The chosen window is 2024-01-01 through 2025-12-31, the two latest calendar
 years represented in the supplied downloads. This is a local fallback, not
 a current FIRMS window: the files contain no 2026 detections and end on
-2025-12-31. The Member 2 migration and database connection are not
-available in this checkout, so no Supabase rows were inserted.
+2025-12-31. The Member 2 schema migration is present. `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` are present in the ignored `.env.local`; a
+standalone Node command must load that file (for example with
+`--env-file=.env.local`). The selected local raw-window artifact has been
+loaded into Supabase; it remains stale and is not a current FIRMS window.
 
 Compile and run from the repository root in PowerShell:
 
@@ -202,9 +205,10 @@ Re-running the same import produced byte-for-byte identical JSONL and
 report files (JSONL SHA-256
 `AB39DE54CD7548B05798DC5144C6FE304220CF560F8DAC63D4AD7E347D3123E7`).
 The local output and compiled scripts are ignored under `data/processed/`;
-`databaseRowsInserted` is zero until the database migration and access are
-available. A failed parse or invalid normalized record stops the run with
-an error instead of being silently dropped.
+the ingest report's `databaseRowsInserted` remains zero because this step
+writes only local JSONL. The separate Supabase loader handles database
+writes. A failed parse or invalid normalized record stops the run with an
+error instead of being silently dropped.
 
 ## Monthly aggregates
 
@@ -214,8 +218,10 @@ local `monthly-counts.json`, `monthly-grid-counts.json`, and
 `aggregate-report.json` files under the ignored `data/processed/` directory.
 The aggregate covers all supplied detections from 2020 through 2025; it is
 not the complete FIRMS history and does not reach the early 2000s. No
-database rows were inserted because the Member 2 migration and database
-access are unavailable.
+monthly source data was added beyond the supplied 2020-2025 files. The
+separate Supabase loader has seeded and reconciled the existing country row
+to the UI's `PH` country ID; live row counts and source comparisons are
+reported below.
 
 Province `raw_count` is the count of unique normalized detections.
 `active_cell_days` counts distinct UTC date / 0.01-degree cell combinations
@@ -301,6 +307,92 @@ Provisional factors, validation measurements, and the limited direct-VIIRS
 series are described in [HARMONIZATION.md](HARMONIZATION.md); the current
 data does not support estimated historical rows without making an
 unsupported coverage assumption.
+
+## Supabase schema mapping and loader
+
+[`scripts/ingest/load-supabase.ts`](../scripts/ingest/load-supabase.ts)
+validates the local artifacts and maps them to the Member 2 migration without
+changing the shared contract or schema:
+
+| Local field | Database field / rule |
+|---|---|
+| `Region.parentId` | `parent_id`; the country row is stored as `PH` to match the live UI default, while source-derived ADM2 IDs are retained and their parent is mapped to `PH` |
+| `hotspot.id` | Both `source_id` and the unique `source_key`; this is the deterministic normalized source key |
+| `RawWindow.admin2_region_id` | Local-only assignment for six special ADM2 regions; the migration has no matching hotspot column, so `province_id` remains null for these non-province areas |
+| `hotspot.acquisitionDatetime` | `acquisition_datetime` |
+| Numeric or categorical `confidence` | `confidence TEXT`; stringified only because the database column is text |
+| `hotspot.sourceProduct` | `source_product` |
+| Grid `latitude` / `longitude` | `cell_lat` / `cell_lon` |
+| Factor `month_count` | `n_months` |
+| Factor MAPE | `error_percent`; MAE, RMSE, fallback reason, and scope are retained in `notes` |
+| Estimated harmonized years | `estimated_years`, derived from rows where `is_estimated=true` |
+
+Rows are upserted in foreign-key order using the schema's natural keys.
+Province factors use `region_id`; the national factor uses a stable row ID,
+because a unique constraint does not make multiple `NULL` region IDs conflict.
+The loader maps only known database columns and checks row keys and region
+references before any write. The country alias and field mappings are covered
+by focused tests.
+
+Run local validation without opening a database connection:
+
+```powershell
+$register = [System.Uri]::new((Resolve-Path '.\tests\analytics\register-paths.mjs').Path).AbsoluteUri
+node --import $register scripts\ingest\load-supabase.ts --dry-run
+```
+
+The dry run validated 88 regions, 82 factors, 6,870 monthly-count rows,
+4,084 harmonized rows, 48,321 grid rows, and 63,386 raw-window records. It
+does not report database inserts or updates. A live write requires the
+explicit `--apply` flag plus `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` in the process environment (the ignored
+`.env.local` can be loaded with Node's `--env-file` option); no credential
+values are written or printed.
+
+### Post-load validation (checked 2026-11-14)
+
+The loader reparented the 87 ADM2 rows to `PH`, removed the now-unreferenced
+legacy country row after checking its foreign-key references, and upserted
+the six tables. A second full run inserted zero rows and updated existing
+records, confirming idempotency. Exact live counts:
+
+| Supabase table | Rows |
+|---|---:|
+| `regions` | 88 |
+| `harmonization_factors` | 82 |
+| `monthly_counts` | 6,870 |
+| `monthly_harmonized` | 4,084 |
+| `monthly_grid_counts` | 48,321 |
+| `hotspots` | 63,386 |
+
+Canonical payload comparisons matched exactly for `monthly_counts`,
+`monthly_grid_counts`, `monthly_harmonized`, and the loaded raw window. The
+regions table has exactly one `PH` country, 81 provinces, and 6 special
+ADM2 `region` rows. The monthly grid's `raw_count` sum is 177,843, matching
+the 177,843 normalized unique source detections. Province monthly
+`raw_count` sums to 176,355; the other 1,488 detections are 933 special
+ADM2 and 555 unassigned detections.
+
+| Year | MODIS source / grid count | VIIRS source / grid count | MODIS province / monthly count | VIIRS province / monthly count | Detection months |
+|---:|---:|---:|---:|---:|---:|
+| 2020 | 5,941 / 5,941 | 38,502 / 38,502 | 5,921 / 5,921 | 38,268 / 38,268 | 12 / 12 each |
+| 2021 | 3,227 / 3,227 | 20,100 / 20,100 | 3,209 / 3,209 | 19,772 / 19,772 | 12 / 12 each |
+| 2022 | 2,569 / 2,569 | 15,291 / 15,291 | 2,550 / 2,550 | 15,042 / 15,042 | 12 / 12 each |
+| 2023 | 4,267 / 4,267 | 24,560 / 24,560 | 4,244 / 4,244 | 24,350 / 24,350 | 12 / 12 each |
+| 2024 | 6,318 / 6,318 | 41,652 / 41,652 | 6,261 / 6,261 | 41,445 / 41,445 | 12 / 12 each |
+| 2025 | 1,988 / 1,988 | 13,428 / 13,428 | 1,965 / 1,965 | 13,328 / 13,328 | 12 / 12 each |
+
+Each detection-month count means detections were present in those months;
+it does not certify complete sensor coverage. The 63,386 raw-window rows
+match the local artifact exactly: 8,306 MODIS and 55,080 VIIRS. Database
+`province_id` is null for 387 rows: 223 have a special ADM2 assignment in
+the local raw-window artifact, and 164 are unassigned or ambiguous. The
+schema has no `admin2_region_id` column, so the special ADM2 assignment is
+not persisted in `hotspots`.
+
+The harmonized table has 4,084 direct VIIRS rows and zero estimated rows.
+The existing dataset therefore still does not provide pre-2018 MODIS
+estimates or verified full-history coverage.
 
 ## Administrative boundaries
 
