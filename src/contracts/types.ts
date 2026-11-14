@@ -41,6 +41,11 @@ export interface HotspotsResponse {
   lastUpdated: string | null;
 }
 
+export interface HotspotWindowResponse {
+  rawWindow: { start: string; end: string } | null;
+  lastUpdated: string | null;
+}
+
 export type AnomalyLabel =
   | "below_baseline"
   | "near_baseline"
