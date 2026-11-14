@@ -329,7 +329,7 @@ missing data into zero.
 - [x] Recent raw import assigns province IDs or reports unassigned rows.
 - [x] Two identical imports produce no duplicate rows.
 - [x] `monthly_counts` contains both instruments and coverage flags.
-- [ ] `monthly_harmonized` flags all MODIS-converted months.
+- [x] `monthly_harmonized` flags all MODIS-converted months.
 - [x] Factors contain method, scope, overlap years, correlation, and error.
 - [x] Correlation, error, leave-one-year-out, and anomaly-consistency
       results are in `docs/HARMONIZATION.md`.
