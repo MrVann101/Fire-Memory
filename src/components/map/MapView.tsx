@@ -23,6 +23,7 @@ export default function MapView({
   region,
   childrenResource,
   regions,
+  imageryDate,
   onSelectRegion,
   drawRectangle,
   onDrawComplete,
@@ -31,6 +32,7 @@ export default function MapView({
   region: Region | null;
   childrenResource: ClientResource<ChildCount[]>;
   regions: Region[];
+  imageryDate: string | null;
   onSelectRegion: (regionId: string) => void;
   drawRectangle: boolean;
   onDrawComplete: (bbox: BBox) => void;
@@ -41,7 +43,7 @@ export default function MapView({
 
   return (
     <section className="map-panel" aria-labelledby="map-title">
-      <div className="section-heading map-heading">
+      <div className="section-heading map-heading sr-only">
         <div>
           <p className="eyebrow">GEOGRAPHIC VIEW</p>
           <h2 id="map-title">Satellite detection map</h2>
@@ -55,6 +57,7 @@ export default function MapView({
           selectedRegion={region}
           childCounts={isNationalView ? childrenResource.data ?? [] : []}
           regions={regions}
+          imageryDate={imageryDate}
           onSelectRegion={onSelectRegion}
           drawRectangle={drawRectangle}
           onRectangleComplete={onDrawComplete}
@@ -88,9 +91,10 @@ export default function MapView({
 
       <div className="map-metadata">
         <p className="map-attribution">
-          Base map © OpenStreetMap contributors. Map points are raw satellite
-          detections for the dates shown below; they are not historical
-          harmonized counts.
+          Satellite imagery © NASA EOSDIS GIBS (VIIRS Suomi-NPP); hotspot
+          markers use NASA FIRMS detections. Imagery date:{" "}
+          {imageryDate ?? "waiting for the selected month"}. Detections are
+          thermal observations, not confirmed fire incidents.
         </p>
         <p className="raw-window">
           <strong>Raw window:</strong>{" "}

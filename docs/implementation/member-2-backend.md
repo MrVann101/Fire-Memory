@@ -30,11 +30,16 @@ frontend files, or Member 4 AI/export files.
 
 - `listRegions(): Promise<Region[]>`
 - `queryHotspots(filters: HotspotFilters, limit?: number): Promise<HotspotsResponse>`
+- `getHotspotWindow(): Promise<HotspotWindowResponse>`
 - `getAnalyticsSummary(query: AnalyticsQuery): Promise<AnalyticsSummary>`
 - `getCalendar(query: Omit<AnalyticsQuery, "year" | "month">): Promise<CalendarResponse>`
 - `getHarmonization(regionId: string): Promise<HarmonizationResponse>`
-- `GET /api/regions`, `/api/hotspots`, `/api/analytics/summary`,
-  `/calendar`, `/children`, and `/harmonization`.
+- `GET /api/regions`, `/api/hotspots`, `/api/hotspots/window`,
+  `/api/analytics/summary`, `/calendar`, `/children`, and `/harmonization`.
+
+`GET /api/hotspots/window` returns the global `rawWindow` and `lastUpdated`
+metadata so the dashboard can select the newest available data month before
+requesting map records.
 
 All responses must match the locked types exactly. Member 4 calls the
 functions directly for exports; Member 3 calls the routes through its client
