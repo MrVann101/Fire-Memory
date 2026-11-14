@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useMemo, useState, useSyncExternalStore } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type {
   AnalyticsQuery,
   AnalyticsSummary,
@@ -224,47 +224,12 @@ function validateBBox(bbox: BBox, countryBBox: BBox | undefined): string | null 
   }
   return null;
 }
-function subscribeCalendarTheme(onStoreChange: () => void) {
-  window.addEventListener("storage", onStoreChange);
-  window.addEventListener("calendar-theme-change", onStoreChange);
-  return () => {
-    window.removeEventListener("storage", onStoreChange);
-    window.removeEventListener("calendar-theme-change", onStoreChange);
-  };
-}
-function getCalendarThemeSnapshot(): "dark" | "light" {
-  try {
-    return window.localStorage.getItem("fire-memory-calendar-theme") === "light"
-      ? "light"
-      : "dark";
-  } catch {
-    return "dark";
-  }
-}
-function getCalendarThemeServerSnapshot(): "dark" | "light" {
-  return "dark";
-}
 export default function DashboardShell({
   activeFeature,
 }: {
   activeFeature: DashboardFeature;
 }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const [isCalendarFiltersOpen, setIsCalendarFiltersOpen] = useState(false);
-  const calendarTheme = useSyncExternalStore(
-    subscribeCalendarTheme,
-    getCalendarThemeSnapshot,
-    getCalendarThemeServerSnapshot
-  );
-  const toggleCalendarTheme = useCallback(() => {
-    const next = calendarTheme === "dark" ? "light" : "dark";
-    try {
-      window.localStorage.setItem("fire-memory-calendar-theme", next);
-    } catch {
-      // Ignore storage errors in private browsing modes.
-    }
-    window.dispatchEvent(new Event("calendar-theme-change"));
-  }, [calendarTheme]);
   const {
     regionId,
     setRegionId,
@@ -940,233 +905,78 @@ export default function DashboardShell({
         </section>
         )}
         {activeFeature !== "map" && (
-          <section
-            className={`dashboard-secondary feature-page${
-              activeFeature === "calendar" ? " calendar-feature-page" : ""
-            }`}
-            data-calendar-theme={
-              activeFeature === "calendar" ? calendarTheme : undefined
-            }
-          >
-            {activeFeature === "calendar" ? (
-              <header className="calendar-command-bar">
-                <div className="calendar-command-title">
-                  <h1 className="feature-page-title">Activity Calendar</h1>
-                  <span className="calendar-command-scope">
-                    {selectedRegion?.name ?? "Select region"} ·{" "}
-                    {metric.toUpperCase()} · UTC
-                  </span>
-                  <div className="calendar-mobile-actions">
-                    <button
-                      type="button"
-                      className="calendar-mobile-filter-chip"
-                      aria-expanded={isCalendarFiltersOpen}
-                      onClick={() =>
-                        setIsCalendarFiltersOpen((open) => !open)
-                      }
-                    >
-                      {selectedRegion?.name ?? "Filter"} ·{" "}
-                      {metric === "harmonized" ? "Harm" : "Raw"}{" "}
-                      {isCalendarFiltersOpen ? "▴" : "▾"}
-                    </button>
-                    <button
-                      type="button"
-                      className="calendar-theme-toggle"
-                      aria-pressed={calendarTheme === "light"}
-                      onClick={toggleCalendarTheme}
-                    >
-                      {calendarTheme === "light" ? "Dark" : "Warm"}
-                    </button>
-                    <Link href="/" className="calendar-map-link">
-                      ← Map
-                    </Link>
-                  </div>
-                </div>
-                <div
-                  className={`calendar-command-controls${
-                    isCalendarFiltersOpen ? " is-open" : ""
-                  }`}
-                  aria-label="Dashboard filters"
+          <section className="dashboard-secondary feature-page">
+            <h1 className="feature-page-title">
+              {dashboardNavItems.find((item) => item.feature === activeFeature)?.label}
+            </h1>
+            <div className="feature-filter-bar" aria-label="Dashboard filters">
+              <div className="filter-field">
+                <label htmlFor="feature-region">Region</label>
+                <select
+                  id="feature-region"
+                  value={regionId}
+                  disabled={regions.isLoading || Boolean(regions.error)}
+                  onChange={(event) => setRegionId(event.target.value)}
                 >
-                  <label className="command-control">
-                    <span>Region</span>
-                    <select
-                      id="feature-region"
-                      value={regionId}
-                      disabled={regions.isLoading || Boolean(regions.error)}
-                      onChange={(event) => setRegionId(event.target.value)}
-                    >
-                      {regions.isLoading && (
-                        <option value="">Loading regions…</option>
-                      )}
-                      {regions.error && (
-                        <option value="">Region catalog unavailable</option>
-                      )}
-                      {regions.data?.map((region) => (
-                        <option key={region.id} value={region.id}>
-                          {region.name}
-                        </option>
-                      ))}
-                      {customRegion && (
-                        <option value="custom">
-                          Custom area · grid-approximated
-                        </option>
-                      )}
-                    </select>
-                  </label>
-                  <label className="command-control">
-                    <span>Month</span>
-                    <input
-                      id="feature-period"
-                      type="month"
-                      value={period}
-                      onChange={(event) => setPeriodSelection(event.target.value)}
-                    />
-                  </label>
-                  <label className="command-control">
-                    <span>Metric</span>
-                    <select
-                      id="feature-metric"
-                      value={metric}
-                      onChange={(event) => {
-                        if (event.target.value === "harmonized") {
-                          setMetric("harmonized");
-                          setInstrument("ALL");
-                        } else if (event.target.value === "raw") {
-                          setMetric("raw");
-                          setInstrument("ALL");
-                        }
-                      }}
-                    >
-                      <option value="harmonized">Harmonized</option>
-                      <option value="raw">Raw</option>
-                    </select>
-                  </label>
-                  <label className="command-control">
-                    <span>Sensor</span>
-                    <select
-                      id="feature-instrument"
-                      value={instrument}
-                      disabled={metric !== "raw"}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        if (
-                          value === "MODIS" ||
-                          value === "VIIRS" ||
-                          value === "ALL"
-                        ) {
-                          setInstrument(value);
-                        }
-                      }}
-                    >
-                      <option value="ALL">All instruments</option>
-                      <option value="MODIS">MODIS</option>
-                      <option value="VIIRS">VIIRS</option>
-                    </select>
-                  </label>
-                  <span className="command-divider desktop-only-control" aria-hidden="true" />
-                  <button
-                    type="button"
-                    className="calendar-theme-toggle desktop-only-control"
-                    aria-pressed={calendarTheme === "light"}
-                    onClick={toggleCalendarTheme}
-                  >
-                    {calendarTheme === "light" ? "Dark Mode" : "Warm White"}
-                  </button>
-                  <Link href="/" className="calendar-map-link desktop-only-control">
-                    ← Map
-                  </Link>
-                </div>
-              </header>
-            ) : (
-              <>
-                <h1 className="feature-page-title">
-                  {
-                    dashboardNavItems.find(
-                      (item) => item.feature === activeFeature
-                    )?.label
-                  }
-                </h1>
-                <div className="feature-filter-bar" aria-label="Dashboard filters">
-                  <div className="filter-field">
-                    <label htmlFor="feature-region">Region</label>
-                    <select
-                      id="feature-region"
-                      value={regionId}
-                      disabled={regions.isLoading || Boolean(regions.error)}
-                      onChange={(event) => setRegionId(event.target.value)}
-                    >
-                      {regions.isLoading && (
-                        <option value="">Loading regions…</option>
-                      )}
-                      {regions.error && (
-                        <option value="">Region catalog unavailable</option>
-                      )}
-                      {regions.data?.map((region) => (
-                        <option key={region.id} value={region.id}>
-                          {region.name}
-                        </option>
-                      ))}
-                      {customRegion && (
-                        <option value="custom">
-                          Custom area · grid-approximated
-                        </option>
-                      )}
-                    </select>
-                  </div>
-                  <div className="filter-field">
-                    <label htmlFor="feature-period">Month</label>
-                    <input
-                      id="feature-period"
-                      type="month"
-                      value={period}
-                      onChange={(event) => setPeriodSelection(event.target.value)}
-                    />
-                  </div>
-                  <div className="filter-field">
-                    <label htmlFor="feature-metric">Metric</label>
-                    <select
-                      id="feature-metric"
-                      value={metric}
-                      onChange={(event) => {
-                        if (event.target.value === "harmonized") {
-                          setMetric("harmonized");
-                          setInstrument("ALL");
-                        } else if (event.target.value === "raw") {
-                          setMetric("raw");
-                          setInstrument("ALL");
-                        }
-                      }}
-                    >
-                      <option value="harmonized">Harmonized</option>
-                      <option value="raw">Raw</option>
-                    </select>
-                  </div>
-                  <div className="filter-field">
-                    <label htmlFor="feature-instrument">Sensor</label>
-                    <select
-                      id="feature-instrument"
-                      value={instrument}
-                      disabled={metric !== "raw"}
-                      onChange={(event) => {
-                        const value = event.target.value;
-                        if (
-                          value === "MODIS" ||
-                          value === "VIIRS" ||
-                          value === "ALL"
-                        ) {
-                          setInstrument(value);
-                        }
-                      }}
-                    >
-                      <option value="ALL">All instruments</option>
-                      <option value="MODIS">MODIS</option>
-                      <option value="VIIRS">VIIRS</option>
-                    </select>
-                  </div>
-                </div>
-              </>
-            )}
+                  {regions.isLoading && <option value="">Loading regions…</option>}
+                  {regions.error && <option value="">Region catalog unavailable</option>}
+                  {regions.data?.map((region) => (
+                    <option key={region.id} value={region.id}>
+                      {region.name}
+                    </option>
+                  ))}
+                  {customRegion && (
+                    <option value="custom">Custom area · grid-approximated</option>
+                  )}
+                </select>
+              </div>
+              <div className="filter-field">
+                <label htmlFor="feature-period">Month</label>
+                <input
+                  id="feature-period"
+                  type="month"
+                  value={period}
+                  onChange={(event) => setPeriodSelection(event.target.value)}
+                />
+              </div>
+              <div className="filter-field">
+                <label htmlFor="feature-metric">Metric</label>
+                <select
+                  id="feature-metric"
+                  value={metric}
+                  onChange={(event) => {
+                    if (event.target.value === "harmonized") {
+                      setMetric("harmonized");
+                      setInstrument("ALL");
+                    } else if (event.target.value === "raw") {
+                      setMetric("raw");
+                      setInstrument("ALL");
+                    }
+                  }}
+                >
+                  <option value="harmonized">Harmonized</option>
+                  <option value="raw">Raw</option>
+                </select>
+              </div>
+              <div className="filter-field">
+                <label htmlFor="feature-instrument">Sensor</label>
+                <select
+                  id="feature-instrument"
+                  value={instrument}
+                  disabled={metric !== "raw"}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value === "MODIS" || value === "VIIRS" || value === "ALL") {
+                      setInstrument(value);
+                    }
+                  }}
+                >
+                  <option value="ALL">All instruments</option>
+                  <option value="MODIS">MODIS</option>
+                  <option value="VIIRS">VIIRS</option>
+                </select>
+              </div>
+            </div>
             {activeFeature === "calendar" && (
               <ActivityCalendar
                 resource={calendar}
