@@ -40,10 +40,19 @@ processed artifacts only; they are not a claim of complete FIRMS coverage.
 
 ## Database and presentation guidance
 
-The schema migration is present, and the local loader dry run validates
-payloads for all six tables. No Supabase rows were loaded because
-`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` were absent from the process
-environment.
+The loader seeded all six Supabase tables on 2026-11-14. Live row counts are
+88 regions, 82 factors, 6,870 monthly counts, 4,084 harmonized rows, 48,321
+grid counts, and 63,386 hotspots. A full repeat run inserted zero rows.
+Source-to-database canonical comparisons matched for monthly counts, grid
+counts, harmonized rows, and hotspots. Year/instrument detection counts and
+province aggregates also match exactly; see [`DATA.md`](../docs/DATA.md#post-load-validation-checked-2026-11-14)
+for the comparison table.
+
+The raw window's 387 null `province_id` values consist of 223 detections
+assigned to special ADM2 regions and 164 unassigned or ambiguous detections.
+The migration has no `admin2_region_id` hotspot column, so the 223 special
+region assignments remain in local artifacts but are not stored in
+Supabase. Do not describe all 387 as unassigned.
 
 For slides, call these **supplied local 2020-2025 downloads** and state that
 coverage is provisional. Do not claim a complete early-2000s-to-present

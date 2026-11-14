@@ -42,6 +42,7 @@ interface HotspotInput {
 interface RawWindowInput {
   hotspot: HotspotInput;
   province_id: string | null;
+  admin2_region_id: string | null;
 }
 
 export interface IngestArtifacts {
@@ -303,6 +304,10 @@ function parseHotspot(value: unknown, index: number): RawWindowInput {
       ),
     },
     province_id: nullableString(row.province_id, `${context}.province_id`),
+    admin2_region_id: nullableString(
+      row.admin2_region_id,
+      `${context}.admin2_region_id`,
+    ),
   };
 }
 
@@ -430,8 +435,16 @@ export function mapArtifactsToDatabase(
       .filter(({ level }) => level === "province")
       .map(({ id }) => id),
   );
+  const specialRegionIds = new Set(
+    artifacts.regions
+      .filter(({ level }) => level === "region")
+      .map(({ id }) => id),
+  );
 
-  const regions: DatabaseRow[] = artifacts.regions.map((region) => ({
+  const orderedRegions = [...artifacts.regions].sort(
+    (left, right) => Number(right.level === "country") - Number(left.level === "country"),
+  );
+  const regions: DatabaseRow[] = orderedRegions.map((region) => ({
     id: databaseIdBySourceId.get(region.id),
     name: region.name,
     level: region.level,
@@ -528,24 +541,39 @@ export function mapArtifactsToDatabase(
       notes,
     };
   });
-  const hotspots: DatabaseRow[] = artifacts.hotspots.map(({ hotspot, province_id }) => {
-    if (province_id !== null && !provinceIds.has(province_id)) {
-      throw new Error(`Hotspot refers to unknown province ${province_id}`);
-    }
-    return {
-      source_id: hotspot.id,
-      source_key: hotspot.id,
-      latitude: hotspot.latitude,
-      longitude: hotspot.longitude,
-      acquisition_datetime: hotspot.acquisitionDatetime,
-      satellite: hotspot.satellite,
-      instrument: hotspot.instrument,
-      confidence: hotspot.confidence === null ? null : String(hotspot.confidence),
-      brightness: hotspot.brightness,
-      source_product: hotspot.sourceProduct,
-      province_id,
-    };
-  });
+  const hotspots: DatabaseRow[] = artifacts.hotspots.map(
+    ({ hotspot, province_id, admin2_region_id }) => {
+      if (province_id !== null && !provinceIds.has(province_id)) {
+        throw new Error(`Hotspot refers to unknown province ${province_id}`);
+      }
+      if (
+        admin2_region_id !== null &&
+        !specialRegionIds.has(admin2_region_id)
+      ) {
+        throw new Error(
+          `Hotspot refers to unknown special ADM2 region ${admin2_region_id}`,
+        );
+      }
+      if (province_id !== null && admin2_region_id !== null) {
+        throw new Error(
+          "Hotspot cannot be assigned to both a province and a special ADM2 region",
+        );
+      }
+      return {
+        source_id: hotspot.id,
+        source_key: hotspot.id,
+        latitude: hotspot.latitude,
+        longitude: hotspot.longitude,
+        acquisition_datetime: hotspot.acquisitionDatetime,
+        satellite: hotspot.satellite,
+        instrument: hotspot.instrument,
+        confidence: hotspot.confidence === null ? null : String(hotspot.confidence),
+        brightness: hotspot.brightness,
+        source_product: hotspot.sourceProduct,
+        province_id,
+      };
+    },
+  );
 
   const payloads: DatabasePayloads = {
     regions,
@@ -672,6 +700,125 @@ async function selectAll(
   }
 }
 
+export function identifyLegacyCountryId(
+  existingRegions: DatabaseRow[],
+  sourceCountryId: string,
+): string | null {
+  const countryRows = existingRegions.filter(({ level }) => level === "country");
+  const legacyRows = countryRows.filter(({ id }) => id !== COUNTRY_DATABASE_ID);
+  if (legacyRows.length === 0) {
+    return null;
+  }
+  if (legacyRows.length !== 1 || countryRows.length > 2) {
+    throw new Error("Multiple country rows exist; resolve them before loading");
+  }
+  const legacyId = legacyRows[0].id;
+  if (typeof legacyId !== "string" || legacyId !== sourceCountryId) {
+    throw new Error(
+      "Existing country ID does not match the source boundary ID; resolve it before loading",
+    );
+  }
+  return legacyId;
+}
+
+const LEGACY_COUNTRY_REFERENCE_COLUMNS: Array<[TableName, string]> = [
+  ["regions", "parent_id"],
+  ["hotspots", "province_id"],
+  ["monthly_counts", "region_id"],
+  ["monthly_harmonized", "region_id"],
+  ["harmonization_factors", "region_id"],
+];
+
+async function countReferences(
+  client: SupabaseClient,
+  table: TableName,
+  column: string,
+  regionId: string,
+): Promise<number> {
+  const { count, error } = await client
+    .from(table)
+    .select("id", { count: "exact", head: true })
+    .eq(column, regionId);
+  if (error) {
+    throw new Error(
+      `Could not inspect ${table}.${column} references (${error.code ?? "unknown"})`,
+    );
+  }
+  return count ?? 0;
+}
+
+async function prepareLegacyCountryReconciliation(
+  client: SupabaseClient,
+  sourceCountryId: string,
+  targetRegions: DatabaseRow[],
+): Promise<string | null> {
+  const existingRegions = await selectAll(client, "regions", [
+    "id",
+    "level",
+    "parent_id",
+  ]);
+  const legacyCountryId = identifyLegacyCountryId(
+    existingRegions,
+    sourceCountryId,
+  );
+  if (legacyCountryId === null) {
+    return null;
+  }
+
+  const targetRegionIds = new Set(
+    targetRegions.map((row, index) =>
+      requiredString(row.id, `Target region row ${index + 1}.id`),
+    ),
+  );
+  const unmatchedChildren = existingRegions.filter(
+    (row) => row.parent_id === legacyCountryId && !targetRegionIds.has(String(row.id)),
+  );
+  if (unmatchedChildren.length > 0) {
+    throw new Error(
+      "Legacy country has child regions outside the current boundary payload; resolve them before loading",
+    );
+  }
+  for (const [table, column] of LEGACY_COUNTRY_REFERENCE_COLUMNS) {
+    if (table === "regions") {
+      continue;
+    }
+    if ((await countReferences(client, table, column, legacyCountryId)) > 0) {
+      throw new Error(
+        `Legacy country is referenced by ${table}.${column}; resolve those rows before loading`,
+      );
+    }
+  }
+  return legacyCountryId;
+}
+
+async function removeLegacyCountryAfterReparent(
+  client: SupabaseClient,
+  legacyCountryId: string,
+): Promise<void> {
+  for (const [table, column] of LEGACY_COUNTRY_REFERENCE_COLUMNS) {
+    if ((await countReferences(client, table, column, legacyCountryId)) > 0) {
+      throw new Error(
+        `Legacy country still has ${table}.${column} references; it was not removed`,
+      );
+    }
+  }
+  const { data, error } = await client
+    .from("regions")
+    .delete()
+    .eq("id", legacyCountryId)
+    .eq("level", "country")
+    .select("id");
+  if (error) {
+    throw new Error(
+      `Could not remove the now-unreferenced legacy country (${error.code ?? "unknown"})`,
+    );
+  }
+  if (data?.length !== 1) {
+    throw new Error("Expected to remove exactly one legacy country row");
+  }
+  process.stdout.write("Reconciled the existing country ID to PH.\n");
+}
+
 function boundedRows(rows: DatabaseRow[], limit: number | undefined): DatabaseRow[] {
   return limit === undefined ? rows : rows.slice(0, limit);
 }
@@ -712,7 +859,9 @@ async function upsertTable(
       .from(table)
       .upsert(batch, { onConflict: conflictColumns });
     if (error) {
-      throw new Error(`Could not upsert ${table} (${error.code ?? "unknown"})`);
+      throw new Error(
+        `Could not upsert ${table} (${error.code ?? "unknown"}): ${error.message}`,
+      );
     }
     for (const row of batch) {
       existingKeys.add(keyFromRow(row, keyColumns));
@@ -773,7 +922,9 @@ async function upsertFactors(
       .from("harmonization_factors")
       .upsert(batch, { onConflict: "region_id" });
     if (error) {
-      throw new Error(`Could not upsert harmonization_factors (${error.code ?? "unknown"})`);
+      throw new Error(
+        `Could not upsert harmonization_factors (${error.code ?? "unknown"}): ${error.message}`,
+      );
     }
     for (const row of batch) {
       existingRegionIds.add(String(row.region_id));
@@ -795,7 +946,9 @@ async function upsertFactors(
       .from("harmonization_factors")
       .upsert([row], { onConflict: "id" });
     if (error) {
-      throw new Error(`Could not upsert national harmonization factor (${error.code ?? "unknown"})`);
+      throw new Error(
+        `Could not upsert national harmonization factor (${error.code ?? "unknown"}): ${error.message}`,
+      );
     }
     if (existingNational.length === 0) {
       inserted += 1;
@@ -856,6 +1009,18 @@ async function runLoader(options: LoaderOptions): Promise<void> {
       .map((table) => `${table}=${payloads[table].length}`)
       .join(", ")}\n`,
   );
+  const assignedProvinceCount = artifacts.hotspots.filter(
+    ({ province_id }) => province_id !== null,
+  ).length;
+  const specialRegionCount = artifacts.hotspots.filter(
+    ({ admin2_region_id }) => admin2_region_id !== null,
+  ).length;
+  const unassignedCount = artifacts.hotspots.length -
+    assignedProvinceCount -
+    specialRegionCount;
+  process.stdout.write(
+    `Hotspot assignments: province_id=${assignedProvinceCount}, special_ADM2_not_representable_in_schema=${specialRegionCount}, unassigned=${unassignedCount}\n`,
+  );
   if (options.dryRun) {
     for (const table of tableOrder) {
       writeProgress(
@@ -878,7 +1043,21 @@ async function runLoader(options: LoaderOptions): Promise<void> {
   const client = createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
+  const sourceCountryId = artifacts.regions.find(
+    ({ level }) => level === "country",
+  )?.id;
+  if (sourceCountryId === undefined) {
+    throw new Error("Country boundary is missing from the region input");
+  }
+  const legacyCountryId = await prepareLegacyCountryReconciliation(
+    client,
+    sourceCountryId,
+    payloads.regions,
+  );
   await upsertTable(client, "regions", payloads.regions, "id", ["id"], undefined, options.batchSize);
+  if (legacyCountryId !== null) {
+    await removeLegacyCountryAfterReparent(client, legacyCountryId);
+  }
   await upsertFactors(
     client,
     payloads.harmonization_factors,

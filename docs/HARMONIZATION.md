@@ -22,16 +22,14 @@ establish zero activity or absent VIIRS coverage. No missing month is
 filled with zero.
 
 The outputs are local files in the ignored `data/processed/` directory.
-`databaseLoaded=false`; these local artifacts have not been loaded into
-Supabase. The schema migration is present, and the URL and service-role key
-are available in ignored `.env.local` (load it into the Node process with
-`--env-file=.env.local`; values are never printed). A read-only check on
-2026-11-14 found 88 regions and one existing harmonization factor, but zero
-rows in the four monthly/hotspot tables. The existing country row is not
-`PH`, and its 87 ADM2 children still reference it. Seeding is paused until
-that country ID is reconciled; otherwise the loader would add a duplicate
-country row. Data through 2025 is not a current window and does not provide
-the requested full history reaching the early 2000s.
+The aggregate and harmonization steps write local files in the ignored
+`data/processed/` directory; their `databaseLoaded=false` field means those
+steps do not write to Supabase. The separate schema-mapped loader seeded all
+six tables on 2026-11-14 and its complete repeat run inserted zero rows.
+The country ID was reconciled to `PH`; detailed database counts and exact
+source comparisons are in [`DATA.md`](./DATA.md#post-load-validation-checked-2026-11-14).
+The files remain limited to 2020-2025, are not a current window, and do not
+provide the requested full history reaching the early 2000s.
 
 ## Calibration method
 

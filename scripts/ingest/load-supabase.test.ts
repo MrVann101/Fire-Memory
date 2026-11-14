@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  identifyLegacyCountryId,
   mapArtifactsToDatabase,
   type IngestArtifacts,
 } from "./load-supabase";
@@ -105,6 +106,7 @@ function artifacts(): IngestArtifacts {
           sourceProduct: null,
         },
         province_id: "PHL-ADM2-bukidnon",
+        admin2_region_id: null,
       },
       {
         hotspot: {
@@ -119,6 +121,22 @@ function artifacts(): IngestArtifacts {
           sourceProduct: "verified-product",
         },
         province_id: null,
+        admin2_region_id: null,
+      },
+      {
+        hotspot: {
+          id: "sha256:special-region-example",
+          latitude: 14.6,
+          longitude: 121,
+          acquisitionDatetime: "2024-01-04T03:04:00.000Z",
+          satellite: "N20",
+          instrument: "VIIRS",
+          confidence: "nominal",
+          brightness: 310.5,
+          sourceProduct: null,
+        },
+        province_id: null,
+        admin2_region_id: "PHL-ADM2-manila",
       },
     ],
   };
@@ -157,6 +175,8 @@ test("maps local artifacts to the Supabase schema and aliases country ID to PH",
   assert.equal(payloads.hotspots[1].confidence, "high");
   assert.equal(payloads.hotspots[1].province_id, null);
   assert.equal(payloads.hotspots[1].source_product, "verified-product");
+  assert.equal(payloads.hotspots[2].province_id, null);
+  assert.equal("admin2_region_id" in payloads.hotspots[2], false);
 });
 
 test("rejects aggregate rows that reference a missing province", () => {
@@ -176,5 +196,47 @@ test("rejects duplicate natural keys instead of relying on database upsert", () 
   assert.throws(
     () => mapArtifactsToDatabase(input),
     /Duplicate monthly_counts key/,
+  );
+});
+
+test("places the country row before child regions for foreign-key-safe batches", () => {
+  const input = artifacts();
+  input.regions.reverse();
+
+  const payloads = mapArtifactsToDatabase(input);
+
+  assert.equal(payloads.regions[0].id, "PH");
+});
+
+test("identifies only the source country ID for guarded reconciliation", () => {
+  assert.equal(
+    identifyLegacyCountryId(
+      [{ id: "PHL-ADM0-country", level: "country" }],
+      "PHL-ADM0-country",
+    ),
+    "PHL-ADM0-country",
+  );
+  assert.equal(
+    identifyLegacyCountryId([{ id: "PH", level: "country" }], "PHL-ADM0-country"),
+    null,
+  );
+  assert.throws(
+    () =>
+      identifyLegacyCountryId(
+        [{ id: "unexpected-country", level: "country" }],
+        "PHL-ADM0-country",
+      ),
+    /does not match the source boundary ID/,
+  );
+  assert.throws(
+    () =>
+      identifyLegacyCountryId(
+        [
+          { id: "PHL-ADM0-country", level: "country" },
+          { id: "another-country", level: "country" },
+        ],
+        "PHL-ADM0-country",
+      ),
+    /Multiple country rows exist/,
   );
 });
