@@ -3,8 +3,10 @@
 import { useCallback } from "react";
 import type {
   AnalyticsQuery,
+  BBox,
   CalendarResponse,
   HotspotFilters,
+  Instrument,
 } from "@/contracts/types";
 import {
   getAnalyticsSummary,
@@ -13,6 +15,7 @@ import {
   getHarmonization,
   getHotspots,
   getHotspotWindow,
+  getLiveHotspots,
   getRegions,
 } from "@/lib/client/api";
 import { useClientResource } from "./useClientResource";
@@ -50,6 +53,29 @@ export function useHotspots(
       return getHotspots(filters, limit, signal);
     },
     [filters, limit]
+  );
+  return useClientResource(key, request);
+}
+
+export function useLiveHotspots(
+  bbox: BBox | null,
+  instrument: Instrument | "ALL",
+  start: string,
+  end: string,
+  enabled = true
+) {
+  const key =
+    enabled && bbox ? JSON.stringify([bbox, instrument, start, end]) : "";
+  const request = useCallback(
+    (signal: AbortSignal) => {
+      if (!bbox) {
+        return Promise.reject(
+          new Error("Live hotspot bounds are not available.")
+        );
+      }
+      return getLiveHotspots(bbox, instrument, start, end, 2_000, signal);
+    },
+    [bbox, instrument, start, end]
   );
   return useClientResource(key, request);
 }

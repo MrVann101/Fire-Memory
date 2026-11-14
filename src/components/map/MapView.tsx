@@ -24,6 +24,7 @@ export default function MapView({
   childrenResource,
   regions,
   imageryDate,
+  isLiveData,
   onSelectRegion,
   drawRectangle,
   onDrawComplete,
@@ -33,6 +34,7 @@ export default function MapView({
   childrenResource: ClientResource<ChildCount[]>;
   regions: Region[];
   imageryDate: string | null;
+  isLiveData?: boolean;
   onSelectRegion: (regionId: string) => void;
   drawRectangle: boolean;
   onDrawComplete: (bbox: BBox) => void;
@@ -40,6 +42,20 @@ export default function MapView({
   const response = resource.data;
   const rawWindow = response?.rawWindow;
   const isNationalView = region?.level === "country";
+  const liveWindowDays = rawWindow
+    ? Math.round(
+        (Date.parse(rawWindow.end) - Date.parse(rawWindow.start)) /
+          (24 * 60 * 60 * 1000)
+      ) + 1
+    : 1;
+  const firmsWmsLayer =
+    liveWindowDays <= 1
+      ? "fires_viirs_24,fires_modis_24"
+      : liveWindowDays <= 2
+        ? "fires_viirs_48,fires_modis_48"
+        : liveWindowDays <= 3
+          ? "fires_viirs_72,fires_modis_72"
+          : "fires_viirs_7,fires_modis_7";
 
   return (
     <section className="map-panel" aria-labelledby="map-title">
@@ -58,6 +74,8 @@ export default function MapView({
           childCounts={isNationalView ? childrenResource.data ?? [] : []}
           regions={regions}
           imageryDate={imageryDate}
+          useFirmsWms={Boolean(isLiveData)}
+          firmsWmsLayer={firmsWmsLayer}
           onSelectRegion={onSelectRegion}
           drawRectangle={drawRectangle}
           onRectangleComplete={onDrawComplete}
@@ -91,10 +109,19 @@ export default function MapView({
 
       <div className="map-metadata">
         <p className="map-attribution">
-          Satellite imagery © NASA EOSDIS GIBS (VIIRS Suomi-NPP); hotspot
-          markers use NASA FIRMS detections. Imagery date:{" "}
-          {imageryDate ?? "waiting for the selected month"}. Detections are
-          thermal observations, not confirmed fire incidents.
+          {isLiveData
+            ? "Cloud-free NASA reference layers with a live NASA FIRMS WMS fire layer."
+            : "Satellite imagery © NASA EOSDIS GIBS (VIIRS Suomi-NPP); NASA FIRMS historical detections."}{" "}
+          Imagery date:{" "}
+          {isLiveData
+            ? "cloud-free FIRMS reference view"
+            : imageryDate ?? "waiting for the selected month"}. Detections
+          are thermal observations, not confirmed fire incidents.
+        </p>
+        <p className="map-drilldown-note">
+          Zoom to level 10 or closer to see approximate MODIS and VIIRS sensor
+          footprints around each detection. These are observation footprints,
+          not confirmed affected areas.
         </p>
         <p className="raw-window">
           <strong>Raw window:</strong>{" "}
@@ -106,6 +133,12 @@ export default function MapView({
                 ? "Unavailable because hotspot data failed to load."
                 : "Loading or not selected."}
         </p>
+        {isLiveData && (
+          <p className="map-drilldown-note" role="status">
+            Current-period map uses live NASA FIRMS observations for the
+            selected live period. Historical analytics remain unchanged.
+          </p>
+        )}
         {response && (
           <div className="map-response-meta" aria-live="polite">
             <span>

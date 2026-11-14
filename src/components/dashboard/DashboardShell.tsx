@@ -6,6 +6,7 @@ import type {
   AnalyticsSummary,
   BBox,
   HarmonizationResponse,
+  Hotspot,
   HotspotFilters,
   Region,
 } from "@/contracts/types";
@@ -25,10 +26,55 @@ import {
   useHarmonization,
   useHotspots,
   useHotspotWindow,
+  useLiveHotspots,
   useRegions,
   useSummary,
 } from "@/hooks/useDashboardData";
 import type { ClientResource } from "@/hooks/useClientResource";
+
+type LiveRange = "today" | "7days" | "month" | "year";
+
+const LIVE_RANGE_OPTIONS: Array<{ value: LiveRange; label: string }> = [
+  { value: "today", label: "Today" },
+  { value: "7days", label: "7 days" },
+  { value: "month", label: "Month" },
+  { value: "year", label: "Year" },
+];
+
+function getLiveDateRange(range: LiveRange): { start: string; end: string } {
+  const now = new Date();
+  const end = now.toISOString().slice(0, 10);
+  const startDate = new Date(now);
+
+  if (range === "today") {
+    return { start: end, end };
+  }
+  if (range === "7days") {
+    startDate.setUTCDate(startDate.getUTCDate() - 6);
+  } else if (range === "month") {
+    startDate.setUTCDate(1);
+  } else {
+    startDate.setUTCMonth(0, 1);
+  }
+
+  return { start: startDate.toISOString().slice(0, 10), end };
+}
+
+function countLiveCellDays(
+  hotspots: Hotspot[],
+  instrument: "MODIS" | "VIIRS"
+): number {
+  const cells = new Set(
+    hotspots
+      .filter((hotspot) => hotspot.instrument === instrument)
+      .map((hotspot) => {
+        const latitudeCell = Math.floor(hotspot.latitude * 100);
+        const longitudeCell = Math.floor(hotspot.longitude * 100);
+        return `${hotspot.acquisitionDatetime.slice(0, 10)}:${latitudeCell}:${longitudeCell}`;
+      })
+  );
+  return cells.size;
+}
 
 function formatSummaryNumber(
   resource: ClientResource<AnalyticsSummary>,
@@ -251,6 +297,7 @@ export default function DashboardShell({
   const [customAreaError, setCustomAreaError] = useState<string | null>(null);
   const [isDrawingArea, setIsDrawingArea] = useState(false);
   const [isFilterPopoverPinned, setIsFilterPopoverPinned] = useState(false);
+  const [liveRange, setLiveRange] = useState<LiveRange>("month");
   const isFilterPopoverOpen = isFilterPopoverPinned;
   const regions = useRegions();
   const hotspotWindow = useHotspotWindow();
@@ -365,6 +412,20 @@ export default function DashboardShell({
       instrument: metric === "raw" ? instrument : "ALL",
     };
   }, [selectedRegion, periodRange, metric, instrument]);
+  const isCurrentPeriod = useMemo(() => {
+    if (!periodRange) {
+      return false;
+    }
+    const now = new Date();
+    return (
+      periodRange.year === now.getUTCFullYear() &&
+      periodRange.month === now.getUTCMonth() + 1
+    );
+  }, [periodRange]);
+  const liveDateRange = useMemo(
+    () => getLiveDateRange(liveRange),
+    [liveRange]
+  );
   const childrenQuery = useMemo<ChildrenQuery | null>(() => {
     if (
       !selectedRegion ||
@@ -382,11 +443,27 @@ export default function DashboardShell({
   }, [selectedRegion, periodRange, metric]);
   const summary = useSummary(analyticsQuery, Boolean(analyticsQuery));
   const calendar = useCalendar(calendarQuery, Boolean(calendarQuery));
-  const hotspots = useHotspots(
+  const historicalHotspots = useHotspots(
     hotspotFilters,
     2_000,
-    Boolean(hotspotFilters)
+    Boolean(hotspotFilters) && !isCurrentPeriod
   );
+  const liveHotspots = useLiveHotspots(
+    selectedRegion?.bbox ?? null,
+    metric === "raw" ? instrument : "ALL",
+    liveDateRange.start,
+    liveDateRange.end,
+    Boolean(selectedRegion) && isCurrentPeriod
+  );
+  const liveCounts = useMemo(() => {
+    if (!isCurrentPeriod || !liveHotspots.data) {
+      return null;
+    }
+    const viirs = countLiveCellDays(liveHotspots.data.hotspots, "VIIRS");
+    const modis = countLiveCellDays(liveHotspots.data.hotspots, "MODIS");
+    return { viirs, modis, harmonized: viirs };
+  }, [isCurrentPeriod, liveHotspots.data]);
+  const hotspots = isCurrentPeriod ? liveHotspots : historicalHotspots;
   const children = useChildren(childrenQuery, Boolean(childrenQuery));
   const harmonizationRequest = useHarmonization(
     selectedRegion?.level === "custom" ? null : selectedRegion?.id ?? null,
@@ -462,9 +539,20 @@ export default function DashboardShell({
     ? `${baselineYears.length} years (${baselineYears[0]}-${baselineYears[baselineYears.length - 1]})`
     : "No comparable baseline";
   const activityMetricDetail =
-    metric === "harmonized"
+    isCurrentPeriod
+      ? "Live FIRMS active cell-days"
+      : metric === "harmonized"
       ? "VIIRS-equivalent active cell-days"
       : `Raw ${instrument === "ALL" ? "all-sensor" : instrument} active cell-days`;
+  const liveCardValue = (value: number | undefined): string => {
+    if (value !== undefined) {
+      return value.toLocaleString("en-US");
+    }
+    if (liveHotspots.isLoading) {
+      return "Loading...";
+    }
+    return liveHotspots.error ? "Unavailable" : "No data";
+  };
   const anomalyLabel = summary.data?.label
     ? summary.data.label.replace("_", " ").replace(/^\w/, (letter) =>
         letter.toUpperCase()
@@ -534,7 +622,13 @@ export default function DashboardShell({
             region={selectedRegion ?? null}
             childrenResource={children}
             regions={regions.data ?? []}
-            imageryDate={periodRange?.end ?? null}
+            imageryDate={
+              isCurrentPeriod
+                ? liveHotspots.data?.rawWindow?.end ??
+                  new Date().toISOString().slice(0, 10)
+                : periodRange?.end ?? null
+            }
+            isLiveData={isCurrentPeriod}
             onSelectRegion={handleSelectRegion}
             drawRectangle={isDrawingArea}
             onDrawComplete={activateCustomArea}
@@ -549,7 +643,9 @@ export default function DashboardShell({
             <article className="map-summary-card">
               <p className="map-summary-card-label">{summaryMonth} Activity</p>
               <strong className="map-summary-card-value">
-                {formatSummaryNumber(summary, summary.data?.currentCount)}
+                {isCurrentPeriod
+                  ? liveCardValue(liveCounts?.harmonized)
+                  : formatSummaryNumber(summary, summary.data?.currentCount)}
               </strong>
               <span className="map-summary-card-detail">
                 {summaryRegion} · {activityMetricDetail}
@@ -563,13 +659,17 @@ export default function DashboardShell({
                 VIIRS Active-Fire (375m)
               </p>
               <strong className="map-summary-card-value">
-                {formatSummaryNumber(
-                  summary,
-                  summary.data?.byInstrument.VIIRS
-                )}
+                {isCurrentPeriod
+                  ? liveCardValue(liveCounts?.viirs)
+                  : formatSummaryNumber(
+                      summary,
+                      summary.data?.byInstrument.VIIRS
+                    )}
               </strong>
               <span className="map-summary-card-detail">
-                Raw active cell-days
+                {isCurrentPeriod
+                  ? "Live FIRMS active cell-days"
+                  : "Raw active cell-days"}
               </span>
               <span className="map-summary-card-disclaimer">
                 Decision Support Intelligence • Non-Predictive Alert
@@ -580,13 +680,17 @@ export default function DashboardShell({
                 MODIS Active-Fire (1km)
               </p>
               <strong className="map-summary-card-value">
-                {formatSummaryNumber(
-                  summary,
-                  summary.data?.byInstrument.MODIS
-                )}
+                {isCurrentPeriod
+                  ? liveCardValue(liveCounts?.modis)
+                  : formatSummaryNumber(
+                      summary,
+                      summary.data?.byInstrument.MODIS
+                    )}
               </strong>
               <span className="map-summary-card-detail">
-                Raw active cell-days
+                {isCurrentPeriod
+                  ? "Live FIRMS active cell-days"
+                  : "Raw active cell-days"}
               </span>
               <span className="map-summary-card-disclaimer">
                 Decision Support Intelligence • Non-Predictive Alert
@@ -611,12 +715,14 @@ export default function DashboardShell({
             >
               <p className="map-summary-card-label">Anomaly vs. Median</p>
               <strong className="map-summary-card-value">
-                {formatAnomalyPercent(summary, summary.data?.anomalyPercent)}
+                {isCurrentPeriod
+                  ? "Not available"
+                  : formatAnomalyPercent(summary, summary.data?.anomalyPercent)}
               </strong>
               <span
                 className={`map-summary-status map-summary-status-${anomalyClass}`}
               >
-                {anomalyLabel}
+                {isCurrentPeriod ? "Live window is partial" : anomalyLabel}
               </span>
               <span className="map-summary-card-disclaimer">
                 Decision Support Intelligence • Non-Predictive Alert
@@ -680,6 +786,37 @@ export default function DashboardShell({
               />
               <span className="field-help">Select a calendar month in UTC.</span>
             </div>
+            <fieldset className="filter-field metric-field">
+              <legend>Live FIRMS period</legend>
+              <div className="segmented-control">
+                {LIVE_RANGE_OPTIONS.map((option) => (
+                  <label
+                    className={liveRange === option.value ? "selected" : ""}
+                    key={option.value}
+                  >
+                    <input
+                      type="radio"
+                      name="live-range"
+                      value={option.value}
+                      checked={liveRange === option.value}
+                      onChange={() => {
+                        setLiveRange(option.value);
+                        const now = new Date();
+                        setPeriodSelection(
+                          `${now.getUTCFullYear()}-${String(
+                            now.getUTCMonth() + 1
+                          ).padStart(2, "0")}`
+                        );
+                      }}
+                    />
+                    {option.label}
+                  </label>
+                ))}
+              </div>
+              <span className="field-help">
+                Select a current-data window for the map.
+              </span>
+            </fieldset>
             <fieldset className="filter-field metric-field">
               <legend>Metric</legend>
               <div className="segmented-control">

@@ -379,6 +379,7 @@ a {
   height: auto;
   border: 0;
   border-radius: 0;
+  overscroll-behavior: contain;
 }
 
 .map-workspace .leaflet-top.leaflet-left {
@@ -1406,29 +1407,76 @@ h1 {
   font-weight: 700;
 }
 
-.leaflet-popup-content h3 {
-  margin: 0 0 8px;
+.detection-popup {
+  width: min(420px, calc(100vw - 48px));
+}
+
+.detection-popup-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 12px;
   color: #183137;
   font-size: 13px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
 }
 
-.leaflet-popup-content dl {
+.detection-popup-title::before {
+  width: 7px;
+  height: 7px;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  background: #bd4e2f;
+  box-shadow: 0 0 0 2px rgb(189 78 47 / 18%);
+  content: "";
+}
+
+.detection-popup-grid {
   display: grid;
-  grid-template-columns: minmax(100px, auto) minmax(0, 1fr);
-  gap: 5px 10px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
   margin: 0;
-  font-size: 11px;
+  font-size: 10px;
 }
 
-.leaflet-popup-content dt {
+.detection-popup-field {
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid rgb(148 163 184 / 22%);
+  border-radius: 6px;
+  background: rgb(148 163 184 / 8%);
+}
+
+.detection-popup-field--wide {
+  grid-column: 1 / -1;
+}
+
+.detection-popup-field dt {
+  margin-bottom: 3px;
   color: #627377;
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.leaflet-popup-content dd {
+.detection-popup-field dd {
   overflow-wrap: anywhere;
   margin: 0;
   color: #183137;
+  line-height: 1.25;
   font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .detection-popup {
+    width: min(320px, calc(100vw - 48px));
+  }
+
+  .detection-popup-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 .calendar-table-wrap,
@@ -2803,12 +2851,21 @@ textarea {
   color: var(--foreground);
 }
 
-.leaflet-popup-content h3,
-.leaflet-popup-content dd {
+.detection-popup-title,
+.detection-popup-field dd {
   color: var(--foreground);
 }
 
-.leaflet-popup-content dt {
+.detection-popup-title::before {
+  border-color: var(--surface-container-high);
+}
+
+.detection-popup-field {
+  border-color: var(--border);
+  background: var(--surface-container);
+}
+
+.detection-popup-field dt {
   color: var(--muted);
 }
 

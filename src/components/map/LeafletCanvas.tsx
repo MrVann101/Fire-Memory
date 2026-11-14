@@ -9,7 +9,7 @@ import type {
   Hotspot,
   Region,
 } from "@/contracts/types";
-import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, WMSTileLayer, useMap } from "react-leaflet";
 
 type ActivityBand = "low" | "moderate" | "high" | "very-high";
 type BubbleBand = ActivityBand | "no-data";
@@ -46,17 +46,27 @@ function popupContent(
   fields: Array<[string, string]>
 ): HTMLElement {
   const container = document.createElement("div");
+  container.className = "detection-popup";
   const heading = document.createElement("h3");
+  heading.className = "detection-popup-title";
   heading.textContent = title;
   container.append(heading);
 
   const list = document.createElement("dl");
+  list.className = "detection-popup-grid";
   for (const [label, value] of fields) {
+    const field = document.createElement("div");
+    field.className = "detection-popup-field";
+    if (label === "Acquisition time") {
+      field.classList.add("detection-popup-field--wide");
+    }
+
     const term = document.createElement("dt");
     const description = document.createElement("dd");
     term.textContent = label;
     description.textContent = value;
-    list.append(term, description);
+    field.append(term, description);
+    list.append(field);
   }
   container.append(list);
   return container;
@@ -122,7 +132,7 @@ function DetectionLayer({ hotspots }: { hotspots: Hotspot[] }) {
           ["Brightness", displayValue(hotspot.brightness)],
           ["Source product", displayValue(hotspot.sourceProduct)],
         ]),
-        { maxWidth: 300 }
+        { maxWidth: 440 }
       );
       marker.on("click", (event) => {
         L.DomEvent.stopPropagation(event.originalEvent);
@@ -133,6 +143,56 @@ function DetectionLayer({ hotspots }: { hotspots: Hotspot[] }) {
     map.addLayer(cluster);
     return () => {
       map.removeLayer(cluster);
+    };
+  }, [hotspots, map]);
+
+  return null;
+}
+
+const FOOTPRINT_MIN_ZOOM = 10;
+
+function getFootprintRadius(hotspot: Hotspot): number {
+  return hotspot.instrument === "VIIRS" ? 375 : 1_000;
+}
+
+function HotspotFootprintLayer({ hotspots }: { hotspots: Hotspot[] }) {
+  const map = useMap();
+
+  useEffect(() => {
+    const layer = L.layerGroup();
+
+    const renderFootprints = () => {
+      layer.clearLayers();
+      if (map.getZoom() < FOOTPRINT_MIN_ZOOM) {
+        return;
+      }
+
+      for (const hotspot of hotspots) {
+        const radius = getFootprintRadius(hotspot);
+        const footprint = L.circle([hotspot.latitude, hotspot.longitude], {
+          radius,
+          color: hotspot.instrument === "VIIRS" ? "#0f766e" : "#b45309",
+          fillColor: hotspot.instrument === "VIIRS" ? "#14b8a6" : "#f59e0b",
+          fillOpacity: 0.14,
+          weight: 1.5,
+          bubblingMouseEvents: false,
+        });
+
+        footprint.bindTooltip(
+          `${hotspot.instrument} sensor footprint: approximately ${radius} m radius`,
+          { direction: "top", opacity: 0.9 }
+        );
+        layer.addLayer(footprint);
+      }
+    };
+
+    map.addLayer(layer);
+    renderFootprints();
+    map.on("zoomend", renderFootprints);
+
+    return () => {
+      map.off("zoomend", renderFootprints);
+      map.removeLayer(layer);
     };
   }, [hotspots, map]);
 
@@ -355,6 +415,8 @@ export default function LeafletCanvas({
   childCounts,
   regions,
   imageryDate,
+  useFirmsWms,
+  firmsWmsLayer,
   onSelectRegion,
   drawRectangle,
   onRectangleComplete,
@@ -364,6 +426,8 @@ export default function LeafletCanvas({
   childCounts: ChildCount[];
   regions: Region[];
   imageryDate: string | null;
+  useFirmsWms: boolean;
+  firmsWmsLayer: string;
   onSelectRegion: (regionId: string) => void;
   drawRectangle: boolean;
   onRectangleComplete: (bbox: BBox) => void;
@@ -374,16 +438,22 @@ export default function LeafletCanvas({
       zoom={5}
       minZoom={4}
       maxZoom={18}
-      scrollWheelZoom={false}
+      scrollWheelZoom={true}
+      worldCopyJump={true}
+      zoomAnimation={true}
+      fadeAnimation={false}
       className="leaflet-map"
       aria-label="Map centered on the Philippines"
     >
-      {imageryDate && (
+      {imageryDate && !useFirmsWms && (
         <TileLayer
           attribution='<a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/global-imagery-browse-services-gibs">NASA EOSDIS GIBS</a> · VIIRS Suomi-NPP'
           url={`https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/VIIRS_SNPP_CorrectedReflectance_TrueColor/default/${imageryDate}/GoogleMapsCompatible_Level9/{z}/{y}/{x}.jpg`}
           maxZoom={18}
           maxNativeZoom={9}
+          updateWhenZooming={true}
+          updateWhenIdle={false}
+          keepBuffer={4}
         />
       )}
       <TileLayer
@@ -391,6 +461,9 @@ export default function LeafletCanvas({
         url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Features_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png"
         maxZoom={18}
         maxNativeZoom={13}
+        updateWhenZooming={true}
+        updateWhenIdle={false}
+        keepBuffer={4}
         opacity={0.75}
       />
       <TileLayer
@@ -398,9 +471,30 @@ export default function LeafletCanvas({
         url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Labels_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png"
         maxZoom={18}
         maxNativeZoom={13}
+        updateWhenZooming={true}
+        updateWhenIdle={false}
+        keepBuffer={4}
       />
       <RegionViewport region={selectedRegion} />
-      <DetectionLayer hotspots={hotspots} />
+      {useFirmsWms ? (
+        <WMSTileLayer
+          url="/api/firms/wms"
+          params={{
+            layers: firmsWmsLayer,
+            format: "image/png",
+            transparent: true,
+            version: "1.1.1",
+          }}
+          attribution="NASA FIRMS"
+          opacity={0.95}
+          updateWhenZooming={true}
+          updateWhenIdle={false}
+          keepBuffer={4}
+        />
+      ) : (
+        <DetectionLayer hotspots={hotspots} />
+      )}
+      <HotspotFootprintLayer hotspots={hotspots} />
       <ChildBubbleLayer
         childCounts={childCounts}
         regions={regions}

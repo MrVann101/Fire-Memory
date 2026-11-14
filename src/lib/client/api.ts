@@ -1,5 +1,6 @@
 import type {
   AnalyticsQuery,
+  BBox,
   AnalyticsSummary,
   CalendarResponse,
   ChildCount,
@@ -253,6 +254,31 @@ export async function getHotspots(
   params.set("limit", String(limit));
 
   return fetchJson<HotspotsResponse>(`/api/hotspots?${params}`, signal);
+}
+
+export async function getLiveHotspots(
+  bbox: BBox,
+  instrument: Instrument | "ALL" = "ALL",
+  start?: string,
+  end?: string,
+  limit = 2_000,
+  signal?: AbortSignal
+): Promise<HotspotsResponse> {
+  const params = new URLSearchParams({
+    bbox: bbox.join(","),
+    instrument,
+    limit: String(limit),
+  });
+  if (start && end) {
+    params.set("start", start);
+    params.set("end", end);
+  } else {
+    params.set("days", "5");
+  }
+  return fetchJson<HotspotsResponse>(
+    `/api/firms/area?${params.toString()}`,
+    signal
+  );
 }
 
 export async function getHotspotWindow(

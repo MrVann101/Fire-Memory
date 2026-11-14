@@ -23,6 +23,22 @@ For ongoing recent-window retrieval, obtain a `FIRMS_MAP_KEY` through NASA
 FIRMS and provide it to scripts only through the environment. Never copy a
 key into a file, terminal output, or Git.
 
+The application now exposes a server-only recent-data route at
+`GET /api/firms/area`. It accepts `bbox`, `instrument` (`MODIS`, `VIIRS`, or
+`ALL`), either `days` (1-5) with an optional `date` (`YYYY-MM-DD`) or a
+`start`/`end` date range, and `limit`. Longer ranges are split into FIRMS's
+maximum five-day requests. The route uses `MODIS_NRT`, `VIIRS_SNPP_NRT`, and
+`VIIRS_NOAA20_NRT` as appropriate, normalizes the CSV response to the shared
+hotspot contract, and reads `FIRMS_MAP_KEY` only on the server. This route is
+for current/recent map observations; it does not replace the downloaded
+2020-2025 files or the historical comparison and harmonization series.
+
+For the live map, the application can also proxy NASA FIRMS WMS fire layers
+through `GET /api/firms/wms`. The proxy keeps `FIRMS_MAP_KEY` server-only and
+allows the supported 24-hour, 48-hour, 72-hour, and seven-day VIIRS+MODIS
+layers. Historical map periods continue to use the normalized archive
+hotspots because FIRMS WMS is a recent-window service.
+
 ## Local downloads inspected
 
 The original CSVs are retained outside the repository. The following
