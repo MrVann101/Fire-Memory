@@ -165,6 +165,7 @@ const DATA_LIMITATIONS =
   "These are satellite detections of thermal anomalies, not confirmed fires or a complete incident record. Coverage, sensor sensitivity, boundaries, and missing observations affect counts. MODIS-only values converted to the VIIRS target are estimates.";
 const HARMONIZATION_NOTE =
   "The series uses UTC monthly active 0.01-degree cell-days and overlap-period calibration to a VIIRS-equivalent scale. The factor, validation error, overlap years, estimated years, and limitations are shown with the result.";
+const IS_SIMULATED_DATA = process.env.NEXT_PUBLIC_USE_MOCKS === "true";
 function parsePeriod(value: string) {
   const match = /^(\d{4})-(\d{2})$/.exec(value);
   if (!match) {
@@ -490,6 +491,10 @@ export default function DashboardShell({
         new Date(Date.UTC(periodRange.year, periodRange.month - 1, 1))
       )
     : "Selected month";
+  const seriesLabel =
+    metric === "harmonized"
+      ? "Harmonized · VIIRS-eq"
+      : `Raw · ${instrument === "ALL" ? "All instruments" : instrument}`;
   const summaryRegion =
     summary.data?.region.name ?? selectedRegion?.name ?? "Selected area";
   const baselineYears = summary.data?.baselineYears ?? [];
@@ -516,7 +521,9 @@ export default function DashboardShell({
         Skip to dashboard
       </a>
       <aside
-        className={`dashboard-sidebar${isSidebarOpen ? " sidebar-open" : ""}`}
+        className={`dashboard-sidebar${isSidebarOpen ? " sidebar-open" : ""}${
+          activeFeature === "anomaly" ? " anomaly-sidebar" : ""
+        }`}
         aria-label="Dashboard sidebar"
       >
         <Link className="sidebar-brand" href="/" aria-label="FIRE MEMORY home">
@@ -559,7 +566,11 @@ export default function DashboardShell({
       </aside>
       <div className="app-content">
       <main
-        className={`dashboard-main${activeFeature === "map" ? " dashboard-map-page" : " dashboard-feature-page"}`}
+        className={`dashboard-main${
+          activeFeature === "map"
+            ? " dashboard-map-page"
+            : " dashboard-feature-page"
+        }${activeFeature === "anomaly" ? " dashboard-anomaly-page" : ""}`}
         id="main-content"
       >
         {activeFeature === "map" && (
@@ -939,7 +950,7 @@ export default function DashboardShell({
           <section
             className={`dashboard-secondary feature-page${
               activeFeature === "calendar" ? " calendar-feature-page" : ""
-            }`}
+            }${activeFeature === "anomaly" ? " anomaly-feature-page" : ""}`}
             data-calendar-theme={
               activeFeature === "calendar" ? calendarTheme : undefined
             }
@@ -1076,14 +1087,63 @@ export default function DashboardShell({
               </header>
             ) : (
               <>
-                <h1 className="feature-page-title">
-                  {
-                    dashboardNavItems.find(
-                      (item) => item.feature === activeFeature
-                    )?.label
-                  }
-                </h1>
-                <div className="feature-filter-bar" aria-label="Dashboard filters">
+                {activeFeature === "anomaly" ? (
+                  <header className="anomaly-page-header">
+                    <div className="anomaly-page-copy">
+                      <h1 className="feature-page-title">
+                        Anomaly detection
+                      </h1>
+                      <p>
+                        Compare the selected month with its historical median,
+                        then inspect how MODIS and VIIRS were harmonized into
+                        one defensible series.
+                      </p>
+                    </div>
+                    <div className="anomaly-page-context">
+                      {IS_SIMULATED_DATA && (
+                        <span className="anomaly-simulated-badge">
+                          <span aria-hidden="true" />
+                          SIMULATED DATA
+                        </span>
+                      )}
+                      <dl className="anomaly-meta-strip">
+                        <div>
+                          <dt>Region</dt>
+                          <dd>
+                            {selectedRegion?.name ??
+                              (regions.isLoading ? "Loading…" : "Select region")}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt>Month</dt>
+                          <dd>{summaryMonth}</dd>
+                        </div>
+                        <div>
+                          <dt>Series</dt>
+                          <dd>{seriesLabel}</dd>
+                        </div>
+                        <div>
+                          <dt>Updated</dt>
+                          <dd>{formatLastUpdated(latestUpdate)}</dd>
+                        </div>
+                      </dl>
+                    </div>
+                  </header>
+                ) : (
+                  <h1 className="feature-page-title">
+                    {
+                      dashboardNavItems.find(
+                        (item) => item.feature === activeFeature
+                      )?.label
+                    }
+                  </h1>
+                )}
+                <div
+                  className={`feature-filter-bar${
+                    activeFeature === "anomaly" ? " anomaly-filter-bar" : ""
+                  }`}
+                  aria-label="Dashboard filters"
+                >
                   <div className="filter-field">
                     <label htmlFor="feature-region">Region</label>
                     <select
@@ -1194,15 +1254,52 @@ export default function DashboardShell({
                   <p>Select a region and period to enable the data exports.</p>
                 </section>
               ))}
-            <footer className="page-footer">
-              <p>FIRE MEMORY · Historical satellite detections</p>
-              <p>{DATA_ATTRIBUTION}</p>
-              <p>{DATA_LIMITATIONS}</p>
-              <p>{HARMONIZATION_NOTE}</p>
-              {summary.data?.notes[0] && (
-                <p>Selected period: {summary.data.notes[0]}</p>
-              )}
-            </footer>
+            {activeFeature === "anomaly" ? (
+              <footer className="page-footer anomaly-page-footer">
+                <div className="anomaly-footer-brand">
+                  <div>
+                    <strong>FIRE MEMORY</strong>
+                    <span>
+                      Historical satellite detections · months grouped in UTC
+                    </span>
+                  </div>
+                  {IS_SIMULATED_DATA && (
+                    <span className="anomaly-footer-badge">
+                      SIMULATED FIXTURES
+                    </span>
+                  )}
+                </div>
+                <div className="anomaly-footer-grid">
+                  <section>
+                    <h2>Source</h2>
+                    <p>{DATA_ATTRIBUTION}</p>
+                  </section>
+                  <section>
+                    <h2>Limitations</h2>
+                    <p>{DATA_LIMITATIONS}</p>
+                  </section>
+                  <section>
+                    <h2>Method</h2>
+                    <p>{HARMONIZATION_NOTE}</p>
+                  </section>
+                </div>
+                {summary.data?.notes[0] && (
+                  <p className="anomaly-footer-note">
+                    Selected period: {summary.data.notes[0]}
+                  </p>
+                )}
+              </footer>
+            ) : (
+              <footer className="page-footer">
+                <p>FIRE MEMORY · Historical satellite detections</p>
+                <p>{DATA_ATTRIBUTION}</p>
+                <p>{DATA_LIMITATIONS}</p>
+                <p>{HARMONIZATION_NOTE}</p>
+                {summary.data?.notes[0] && (
+                  <p>Selected period: {summary.data.notes[0]}</p>
+                )}
+              </footer>
+            )}
           </section>
         )}
         {activeFeature === "map" && (

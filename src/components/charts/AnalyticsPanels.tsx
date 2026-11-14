@@ -52,6 +52,22 @@ function formatMetric(value: number | null, suffix = ""): string {
     : `${value.toLocaleString("en-US", { maximumFractionDigits: 4 })}${suffix}`;
 }
 
+function formatAnomalyPercent(value: number | null): string {
+  return value === null
+    ? "Not available"
+    : `${value > 0 ? "+" : ""}${value.toLocaleString("en-US", {
+        maximumFractionDigits: 1,
+      })}%`;
+}
+
+function gaugePoint(value: number, radius: number) {
+  const angle = Math.PI * (1 - (value + 100) / 200);
+  return {
+    x: 120 + Math.cos(angle) * radius,
+    y: 112 - Math.sin(angle) * radius,
+  };
+}
+
 export function AnomalyPanel({
   resource,
 }: {
@@ -59,11 +75,27 @@ export function AnomalyPanel({
 }) {
   const summary = resource.data;
   const anomaly = summary ? anomalyPresentation[summary.label] : null;
+  const anomalyPercent = summary?.anomalyPercent ?? null;
+  const gaugeValue =
+    anomalyPercent === null
+      ? null
+      : Math.max(-100, Math.min(100, anomalyPercent));
+  const needle = gaugeValue === null ? null : gaugePoint(gaugeValue, 78);
   const title = resource.isLoading
     ? "Loading comparison…"
     : resource.error
       ? "Comparison unavailable"
       : anomaly?.label ?? "No comparison loaded";
+  const gaugeLabel = summary
+    ? formatAnomalyPercent(anomalyPercent)
+    : resource.isLoading
+      ? "Loading…"
+      : "Unavailable";
+  const countComparison = summary
+    ? `Current ${formatCount(summary.currentCount)} · median ${formatCount(summary.historicalMedian)}`
+    : resource.isLoading
+      ? "Loading baseline"
+      : "No comparison available";
   const notes =
     summary?.notes.length
       ? summary.notes
@@ -89,7 +121,9 @@ export function AnomalyPanel({
       </div>
 
       <div
-        className={`anomaly-status${resource.error ? " analytics-error" : ""}`}
+        className={`anomaly-status${
+          summary ? ` anomaly-status-${summary.label}` : ""
+        }${resource.error ? " analytics-error" : ""}`}
         role={resource.error ? "alert" : "status"}
         aria-live="polite"
       >
@@ -98,6 +132,86 @@ export function AnomalyPanel({
         {!summary && resource.error && (
           <span className="anomaly-status-description">{resource.error.message}</span>
         )}
+      </div>
+
+      <div className="anomaly-gauge">
+        <svg
+          className="anomaly-gauge-chart"
+          viewBox="0 0 240 136"
+          role="img"
+          aria-label={
+            gaugeValue === null
+              ? "Anomaly comparison is unavailable"
+              : `Anomaly ${formatAnomalyPercent(anomalyPercent)} versus the historical median`
+          }
+        >
+          <defs>
+            <linearGradient
+              id="anomaly-gauge-gradient"
+              x1="24"
+              y1="0"
+              x2="216"
+              y2="0"
+              gradientUnits="userSpaceOnUse"
+            >
+              <stop offset="0%" stopColor="#31c59b" />
+              <stop offset="50%" stopColor="#f3bd35" />
+              <stop offset="76%" stopColor="#f28a2e" />
+              <stop offset="100%" stopColor="#e34b4b" />
+            </linearGradient>
+          </defs>
+          <path
+            className="anomaly-gauge-track"
+            d="M 24 112 A 96 96 0 0 1 216 112"
+          />
+          <path
+            className="anomaly-gauge-arc"
+            d="M 24 112 A 96 96 0 0 1 216 112"
+          />
+          {[-75, -50, -25, 0, 25, 50, 75].map((tick) => {
+            const inner = gaugePoint(tick, 82);
+            const outer = gaugePoint(tick, 91);
+            return (
+              <line
+                key={tick}
+                className="anomaly-gauge-tick"
+                x1={inner.x}
+                y1={inner.y}
+                x2={outer.x}
+                y2={outer.y}
+              />
+            );
+          })}
+          {needle && (
+            <line
+              className="anomaly-gauge-needle"
+              x1="120"
+              y1="112"
+              x2={needle.x}
+              y2={needle.y}
+            />
+          )}
+          <circle className="anomaly-gauge-hub" cx="120" cy="112" r="5" />
+          <text className="anomaly-gauge-label" x="22" y="132">
+            -100%
+          </text>
+          <text className="anomaly-gauge-label" x="120" y="132" textAnchor="middle">
+            0
+          </text>
+          <text
+            className="anomaly-gauge-label"
+            x="218"
+            y="132"
+            textAnchor="end"
+          >
+            +100%
+          </text>
+        </svg>
+        <div className="anomaly-gauge-readout">
+          <strong>{gaugeLabel}</strong>
+          <span>versus historical median</span>
+          <p>{countComparison}</p>
+        </div>
       </div>
 
       <dl className="analytics-details">
