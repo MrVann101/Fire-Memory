@@ -322,7 +322,7 @@ missing data into zero.
 
 ## 9. Handoff checklist
 
-- [ ] Archive requests, earliest dates, and overlap years are documented or
+- [x] Archive requests, earliest dates, and overlap years are documented or
       explicitly marked `VERIFY`.
 - [ ] `data/sample/` contains labeled real sample files and field mapping.
 - [ ] Boundaries are WGS84, licensed, simplified, and loadable.
