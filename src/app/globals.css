@@ -2724,6 +2724,65 @@ textarea {
   color: #fcd34d;
 }
 
+.sidebar-nav-link.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.dashboard-main.dashboard-feature-page {
+  min-height: 100vh;
+}
+
+.dashboard-secondary.feature-page {
+  display: grid;
+  align-content: start;
+  gap: 20px;
+}
+
+.feature-page-title {
+  margin: 0;
+  color: var(--foreground);
+  font-size: clamp(24px, 3vw, 32px);
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+}
+
+.feature-filter-bar {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.feature-filter-bar .filter-field {
+  align-content: start;
+}
+
+.feature-page .assistant-panel,
+.feature-page .analytics-panel,
+.feature-page .calendar-panel,
+.feature-page .export-card,
+.feature-page .export-unavailable-card {
+  width: 100%;
+}
+
+.feature-page .analytics-stack {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.feature-page .page-footer {
+  margin-top: 8px;
+}
+
+@media (max-width: 600px) {
+  .dashboard-secondary.feature-page {
+    width: min(100% - 32px, 1200px);
+  }
+}
+
 .hotspot-marker-dot {
   border-color: #fff1e6;
   background: var(--accent);
