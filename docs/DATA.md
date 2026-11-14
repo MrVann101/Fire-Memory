@@ -206,6 +206,98 @@ The local output and compiled scripts are ignored under `data/processed/`;
 available. A failed parse or invalid normalized record stops the run with
 an error instead of being silently dropped.
 
+## Monthly aggregates
+
+`scripts/ingest/aggregate.ts` processes one source CSV at a time, normalizes
+and deduplicates exact source rows, assigns province boundaries, and writes
+local `monthly-counts.json`, `monthly-grid-counts.json`, and
+`aggregate-report.json` files under the ignored `data/processed/` directory.
+The aggregate covers all supplied detections from 2020 through 2025; it is
+not the complete FIRMS history and does not reach the early 2000s. No
+database rows were inserted because the Member 2 migration and database
+access are unavailable.
+
+Province `raw_count` is the count of unique normalized detections.
+`active_cell_days` counts distinct UTC date / 0.01-degree cell combinations
+per province, month, and instrument; MODIS Terra and Aqua are combined at
+the instrument level for that metric. The 0.1-degree
+`monthly_grid_counts` includes every unique source detection, including
+points assigned to special city/NCR ADM2 units or left unassigned. Sensor
+identity remains distinct, so coincident MODIS and VIIRS detections are not
+deduplicated against each other.
+
+An aggregate row with `has_coverage=true` has at least one detection in the
+downloaded file. There are no `has_coverage=false` rows: absent province /
+month rows are omitted and remain unknown because a missing detection is not
+proof of missing sensor coverage. The per-year/instrument report uses
+`detections-present; completeness-unknown`; its detection-month list is not
+a coverage certification.
+
+Compile and run from the repository root in PowerShell:
+
+```powershell
+npx tsc --target es2022 --module commonjs --moduleResolution node `
+  --strict --esModuleInterop --skipLibCheck --types node `
+  --outDir data/processed/.compiled `
+  scripts/ingest/aggregate.ts scripts/ingest/normalize.ts `
+  scripts/ingest/load-regions.ts
+node data/processed/.compiled/aggregate.js `
+  --modis data/raw/modis/modis_2020_Philippines.csv `
+  --viirs data/raw/viirs-noaa20/viirs-jpss1_2020_Philippines.csv `
+  --modis data/raw/modis/modis_2021_Philippines.csv `
+  --viirs data/raw/viirs-noaa20/viirs-jpss1_2021_Philippines.csv `
+  --modis data/raw/modis/modis_2022_Philippines.csv `
+  --viirs data/raw/viirs-noaa20/viirs-jpss1_2022_Philippines.csv `
+  --modis data/raw/modis/modis_2023_Philippines.csv `
+  --viirs data/raw/viirs-noaa20/viirs-jpss1_2023_Philippines.csv `
+  --modis data/raw/modis/modis_2024_Philippines.csv `
+  --viirs data/raw/viirs-noaa20/viirs-jpss1_2024_Philippines.csv `
+  --modis data/raw/modis/modis_2025_Philippines.csv `
+  --viirs data/raw/viirs-noaa20/viirs-jpss1_2025_Philippines.csv `
+  --output-dir data/processed
+```
+
+### Local aggregate validation
+
+The 12 files contained 177,843 rows (24,310 MODIS and 153,533 VIIRS).
+Normalization found no exact duplicates. The province aggregates account
+for 176,355 detections; 933 were assigned to the retained non-province
+ADM2 units and excluded from province counts, and 555 had no unique ADM2
+match. The output contains 6,870 positive province/month/instrument rows
+with summed `raw_count` 176,355, plus 48,321 0.1-degree grid/month rows
+with summed `raw_count` 177,843. No zero-count months were synthesized.
+Summed province `active_cell_days` are 23,337 MODIS and 123,248 VIIRS;
+the corresponding 0.1-degree grid totals are 18,019 and 89,278. A focused
+hand-count fixture verified that three MODIS points in two 0.01-degree
+cell-days count as `raw_count=3` and `active_cell_days=2`, while the
+coincident VIIRS detection remains a separate instrument aggregate.
+
+| Year | Instrument | Source detections | Province rows | Non-province ADM2 | Unassigned | Months with detections |
+|---:|---|---:|---:|---:|---:|---:|
+| 2020 | MODIS | 5,941 | 5,921 | 20 | 0 | 12 |
+| 2020 | VIIRS NOAA-20 | 38,502 | 38,268 | 166 | 68 | 12 |
+| 2021 | MODIS | 3,227 | 3,209 | 17 | 1 | 12 |
+| 2021 | VIIRS NOAA-20 | 20,100 | 19,772 | 182 | 146 | 12 |
+| 2022 | MODIS | 2,569 | 2,550 | 17 | 2 | 12 |
+| 2022 | VIIRS NOAA-20 | 15,291 | 15,042 | 146 | 103 | 12 |
+| 2023 | MODIS | 4,267 | 4,244 | 23 | 0 | 12 |
+| 2023 | VIIRS NOAA-20 | 24,560 | 24,350 | 139 | 71 | 12 |
+| 2024 | MODIS | 6,318 | 6,261 | 20 | 37 | 12 |
+| 2024 | VIIRS NOAA-20 | 41,652 | 41,445 | 121 | 86 | 12 |
+| 2025 | MODIS | 1,988 | 1,965 | 5 | 18 | 12 |
+| 2025 | VIIRS NOAA-20 | 13,428 | 13,328 | 77 | 23 | 12 |
+
+These are source detections and detection-bearing months, not verified
+coverage. Re-running aggregation produced byte-for-byte identical output
+files (monthly counts SHA-256
+`E5672758EA0AFDFE67B44BF43353B3CBF3DE3814BFD636248B3B2FCF22B834C6`,
+grid counts SHA-256
+`2B803516B34911451B3273DCD15D4A9492DEB0E02847095BAD69475E93DF603C`).
+The `aggregate-report.json` explicitly records
+`databaseLoaded=false` and `databaseRowsInserted=0`.
+The aggregate report SHA-256 is
+`59494856FB7659A593C46704156EF1BED3BBFB4FCCE81741757B311F1BA8C783`.
+
 ## Administrative boundaries
 
 The country and ADM2 GeoJSON inputs are documented in

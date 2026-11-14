@@ -328,7 +328,7 @@ missing data into zero.
 - [x] Boundaries are WGS84, licensed, simplified, and loadable.
 - [x] Recent raw import assigns province IDs or reports unassigned rows.
 - [x] Two identical imports produce no duplicate rows.
-- [ ] `monthly_counts` contains both instruments and coverage flags.
+- [x] `monthly_counts` contains both instruments and coverage flags.
 - [ ] `monthly_harmonized` flags all MODIS-converted months.
 - [ ] Factors contain method, scope, overlap years, correlation, and error.
 - [ ] Correlation, error, leave-one-year-out, and anomaly-consistency
