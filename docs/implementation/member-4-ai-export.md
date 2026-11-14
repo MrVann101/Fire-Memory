@@ -249,10 +249,10 @@ no secret or stack trace is exposed.
 - [x] Estimated values, harmonization error, and custom approximation appear.
 - [x] Unsafe evacuation/prediction requests are refused.
 - [x] Ten-plus AI cases pass.
-- [ ] Hotspot CSV matches contract columns and warns when truncated.
-- [ ] Analytics CSV contains year, month, metric, count, estimated, median.
+- [x] Hotspot CSV matches contract columns and warns when truncated.
+- [x] Analytics CSV contains year, month, metric, count, estimated, median.
 - [x] Assistant has loading/error states, suggested questions, and disclaimer.
-- [ ] Export button has exact props and uses active dashboard filters.
+- [x] Export button has exact props and uses active dashboard filters.
 - [ ] Four slides, timed script, Q&A, and backup-video plan are complete.
 
 ## 10. If you are blocked
