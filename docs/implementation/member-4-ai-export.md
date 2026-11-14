@@ -246,9 +246,9 @@ no secret or stack trace is exposed.
 - [ ] `GEMINI_API_KEY` is server-only.
 - [ ] Prompt uses only `AnalyticsSummary` and treats question as untrusted.
 - [ ] AI mentions region, period, count, median, baseline years, and limits.
-- [ ] Estimated values, harmonization error, and custom approximation appear.
-- [ ] Unsafe evacuation/prediction requests are refused.
-- [ ] Ten-plus AI cases pass.
+- [x] Estimated values, harmonization error, and custom approximation appear.
+- [x] Unsafe evacuation/prediction requests are refused.
+- [x] Ten-plus AI cases pass.
 - [ ] Hotspot CSV matches contract columns and warns when truncated.
 - [ ] Analytics CSV contains year, month, metric, count, estimated, median.
 - [ ] Assistant has loading/error states, suggested questions, and disclaimer.

@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { AI_MAX_QUESTION_LENGTH } from "./config";
+
 const regionLevelSchema = z.enum(["country", "region", "province", "custom"]);
 const metricSchema = z.enum(["harmonized", "raw"]);
 const instrumentSchema = z.enum(["MODIS", "VIIRS", "ALL"]);
@@ -72,7 +74,7 @@ export const analyticsSummarySchema = z
 export const aiBriefRequestSchema = z
   .object({
     summary: analyticsSummarySchema,
-    question: z.string().trim().min(1).max(1_000),
+    question: z.string().trim().min(1).max(AI_MAX_QUESTION_LENGTH),
   })
   .strict();
 
