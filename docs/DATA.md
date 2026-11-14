@@ -117,8 +117,47 @@ The common-contract mapping is limited to verified shared fields:
 `Confidence` unchanged; `Brightness` (with the verified product-specific
 field selection) to brightness; and the actual source product name to
 `sourceProduct`. Do not guess missing columns or silently coerce confidence.
-The source row and selected product name should remain available for audit
-when normalization is implemented.
+The normalizer keeps the original row alongside the contract-shaped record
+for audit and retains a product name when one is verified.
+
+## Normalization
+
+`scripts/ingest/normalize.ts` implements the documented `Hotspot` shape
+without changing the locked contract. It reads a CSV, validates required
+fields and coordinate/time ranges, retains numeric confidence as a number
+and categorical confidence as its original string, and maps MODIS
+`brightness` or VIIRS `bright_ti4` to `brightness`. UTC acquisition times
+accept one- through four-digit `HHMM` values and are emitted as ISO 8601.
+
+The deterministic `id` is a SHA-256 hash of instrument, source satellite,
+normalized coordinates and timestamp, `sourceProduct`, and all original
+source fields in sorted-name order. Exact duplicate source rows produce one
+normalized record. The JSONL output wraps the contract-shaped `hotspot` with
+its original `sourceRow` for audit; insert only the nested `hotspot` into a
+contract table. `sourceProduct` stays null unless explicitly supplied or
+present in the source row. The current downloads lack an archive manifest,
+so no standard/NRT product name is inferred from filenames or `version`.
+
+Run one source file at a time:
+
+```powershell
+node --experimental-strip-types scripts/ingest/normalize.ts `
+  --input data/raw/modis/modis_2020_Philippines.csv `
+  --output "$env:TEMP\fire-memory\modis_2020_normalized.jsonl" `
+  --instrument MODIS
+```
+
+Supply `--source-product` only when verified from the archive metadata.
+Equivalent commands apply to VIIRS using its CSV and `--instrument VIIRS`.
+The checked real-row sample outputs each contain three contract-shaped
+hotspots; numeric MODIS confidence and categorical VIIRS confidence remain
+different JSON types. Three focused tests cover UTC conversion, duplicate
+rows, confidence types, invalid coordinates, and impossible times.
+
+The shared `src/contracts/types.ts` file is absent from this checkout. The
+normalizer mirrors the `Hotspot` definition in the locked work-plan contract
+and does not edit or create a shared contract file; integration should check
+the type against the contract when that file is supplied.
 
 ## Attribution and use
 

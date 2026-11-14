@@ -10,6 +10,9 @@ simulated data; the source CSV headers and values are preserved. No
 - [`viirs_noaa20_firms_sample.csv`](./viirs_noaa20_firms_sample.csv): three
   VIIRS NOAA-20 records from
   `data/raw/viirs-noaa20/viirs-jpss1_2020_Philippines.csv`.
+- [`modis_normalized.jsonl`](./modis_normalized.jsonl) and
+  [`viirs_noaa20_normalized.jsonl`](./viirs_noaa20_normalized.jsonl): the
+  corresponding contract-shaped outputs, each wrapped with its source row.
 - Source page: [NASA FIRMS Archive Download](https://firms.modaps.eosdis.nasa.gov/download/)
 - Retrieval date reported by the downloader: 2026-11-14.
 
