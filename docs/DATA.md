@@ -159,6 +159,22 @@ normalizer mirrors the `Hotspot` definition in the locked work-plan contract
 and does not edit or create a shared contract file; integration should check
 the type against the contract when that file is supplied.
 
+## Administrative boundaries
+
+The country and ADM2 GeoJSON inputs are documented in
+[`data/boundaries/README.md`](../data/boundaries/README.md). They are
+geoBoundaries provider-simplified files pinned to the releases listed there;
+the source-specific license is CC BY 3.0 IGO, with original boundary data
+credited to OCHA Philippines, NAMRIA, and PSA. The ADM2 layer has 87 units:
+81 provinces and six city/NCR district units retained as `region` because
+the locked region-level contract has no city/district level. IDs use source
+`shapeID`, not names. Three known points matched the same province in the
+full and provider-simplified geometry. The simplification tolerance is not
+published by the provider. This is a 2020 boundary vintage, not a current
+administrative gazetteer; it contains the pre-2022 single Maguindanao unit,
+so assignments there cannot distinguish Maguindanao del Norte from
+Maguindanao del Sur.
+
 ## Attribution and use
 
 NASA FIRMS says it promotes full and open sharing of data and encourages
@@ -208,3 +224,8 @@ All sources below were checked on 2026-11-14:
   — NRT MODIS and VIIRS field names and definitions.
 - [NASA FIRMS FAQ](https://www.earthdata.nasa.gov/data/tools/firms/faq) —
   standard/NRT distinctions, caveats, and attribution guidance.
+- [geoBoundaries current PHL ADM0 metadata](https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM0/)
+  — country release, original source, and product-specific license.
+- [geoBoundaries current PHL ADM2 metadata](https://www.geoboundaries.org/api/current/gbOpen/PHL/ADM2/)
+  — province-level release, unit count, original source, and
+  product-specific license.

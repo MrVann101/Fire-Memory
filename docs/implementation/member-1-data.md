@@ -325,7 +325,7 @@ missing data into zero.
 - [x] Archive requests, earliest dates, and overlap years are documented or
       explicitly marked `VERIFY`.
 - [x] `data/sample/` contains labeled real sample files and field mapping.
-- [ ] Boundaries are WGS84, licensed, simplified, and loadable.
+- [x] Boundaries are WGS84, licensed, simplified, and loadable.
 - [ ] Recent raw import assigns province IDs or reports unassigned rows.
 - [ ] Two identical imports produce no duplicate rows.
 - [ ] `monthly_counts` contains both instruments and coverage flags.
