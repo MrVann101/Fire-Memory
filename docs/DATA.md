@@ -168,8 +168,9 @@ source row, and writes deterministic JSONL in batches plus a count report.
 The chosen window is 2024-01-01 through 2025-12-31, the two latest calendar
 years represented in the supplied downloads. This is a local fallback, not
 a current FIRMS window: the files contain no 2026 detections and end on
-2025-12-31. The Member 2 migration and database connection are not
-available in this checkout, so no Supabase rows were inserted.
+2025-12-31. The Member 2 schema migration is present, but
+`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` were absent from the process
+environment during the latest check, so no Supabase rows were inserted.
 
 Compile and run from the repository root in PowerShell:
 
@@ -214,8 +215,8 @@ local `monthly-counts.json`, `monthly-grid-counts.json`, and
 `aggregate-report.json` files under the ignored `data/processed/` directory.
 The aggregate covers all supplied detections from 2020 through 2025; it is
 not the complete FIRMS history and does not reach the early 2000s. No
-database rows were inserted because the Member 2 migration and database
-access are unavailable.
+database rows were inserted because Supabase credentials were not present in
+the process environment. The schema migration is available in the repository.
 
 Province `raw_count` is the count of unique normalized detections.
 `active_cell_days` counts distinct UTC date / 0.01-degree cell combinations
@@ -301,6 +302,45 @@ Provisional factors, validation measurements, and the limited direct-VIIRS
 series are described in [HARMONIZATION.md](HARMONIZATION.md); the current
 data does not support estimated historical rows without making an
 unsupported coverage assumption.
+
+## Supabase schema mapping and loader
+
+[`scripts/ingest/load-supabase.ts`](../scripts/ingest/load-supabase.ts)
+validates the local artifacts and maps them to the Member 2 migration without
+changing the shared contract or schema:
+
+| Local field | Database field / rule |
+|---|---|
+| `Region.parentId` | `parent_id`; the country row is stored as `PH` to match the live UI default, while source-derived ADM2 IDs are retained and their parent is mapped to `PH` |
+| `hotspot.id` | Both `source_id` and the unique `source_key`; this is the deterministic normalized source key |
+| `hotspot.acquisitionDatetime` | `acquisition_datetime` |
+| Numeric or categorical `confidence` | `confidence TEXT`; stringified only because the database column is text |
+| `hotspot.sourceProduct` | `source_product` |
+| Grid `latitude` / `longitude` | `cell_lat` / `cell_lon` |
+| Factor `month_count` | `n_months` |
+| Factor MAPE | `error_percent`; MAE, RMSE, fallback reason, and scope are retained in `notes` |
+| Estimated harmonized years | `estimated_years`, derived from rows where `is_estimated=true` |
+
+Rows are upserted in foreign-key order using the schema's natural keys.
+Province factors use `region_id`; the national factor uses a stable row ID,
+because a unique constraint does not make multiple `NULL` region IDs conflict.
+The loader maps only known database columns and checks row keys and region
+references before any write. The country alias and field mappings are covered
+by focused tests.
+
+Run local validation without opening a database connection:
+
+```powershell
+$register = [System.Uri]::new((Resolve-Path '.\tests\analytics\register-paths.mjs').Path).AbsoluteUri
+node --import $register scripts\ingest\load-supabase.ts --dry-run
+```
+
+The dry run validated 88 regions, 82 factors, 6,870 monthly-count rows,
+4,084 harmonized rows, 48,321 grid rows, and 63,386 raw-window records. It
+does not report database inserts or updates. A live write requires the
+explicit `--apply` flag plus `SUPABASE_URL` and
+`SUPABASE_SERVICE_ROLE_KEY` in the process environment; no credential values
+are written or printed. The database is **not loaded** as of this check.
 
 ## Administrative boundaries
 

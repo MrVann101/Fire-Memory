@@ -136,8 +136,11 @@ export class MonthlyAggregateBuilder {
   private provinceRowsAggregated = 0;
   private regionRowsExcluded = 0;
   private unassignedRowsExcluded = 0;
+  private readonly boundaries: ReturnType<typeof loadRegions>;
 
-  constructor(private readonly boundaries: ReturnType<typeof loadRegions>) {}
+  constructor(boundaries: ReturnType<typeof loadRegions>) {
+    this.boundaries = boundaries;
+  }
 
   addFile(input: AggregateInput): void {
     if (input.sourceRows !== input.records.length + input.duplicateRows) {

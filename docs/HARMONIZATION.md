@@ -22,8 +22,10 @@ establish zero activity or absent VIIRS coverage. No missing month is
 filled with zero.
 
 The outputs are local files in the ignored `data/processed/` directory.
-`databaseLoaded=false`; no rows were inserted into Supabase. Data through
-2025 is not a current window and does not provide the requested full
+`databaseLoaded=false`; no rows were inserted into Supabase. The database
+schema migration is present, but the Supabase URL and service-role key were
+not available in the process environment during the latest check. Data
+through 2025 is not a current window and does not provide the requested full
 history reaching the early 2000s.
 
 ## Calibration method
@@ -138,7 +140,7 @@ without additional coverage and validation.
   values are documented implementation choices, not validated
   requirements.
 - Re-run with complete data and independently compare against database
-  counts once Member 2's migration and database access are available.
+  counts once the required Supabase environment variables are available.
 - Keep source confidence and platform provenance unchanged in raw records.
   Active-fire detections are thermal anomalies, not confirmed incidents.
 
