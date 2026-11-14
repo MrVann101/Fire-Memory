@@ -186,11 +186,9 @@ export function ExportButton({
   }
 
   const targetArea = regionName ?? filters.regionId;
-  const dateWindow = `${filters.start} to ${filters.end} (UTC)`;
+  const dateWindow = `${filters.start} → ${filters.end}`;
   const analysisMode =
-    metric === "harmonized"
-      ? "Harmonized (VIIRS-equivalent)"
-      : "Raw Sensor Counts";
+    metric === "harmonized" ? "Harmonized (VIIRS-eq)" : "Raw Sensor";
   const sensorFilter = filters.instrument ?? "ALL";
 
   return (
@@ -199,13 +197,12 @@ export function ExportButton({
       className="export-card"
     >
       <header className="export-header">
-        <p className="eyebrow export-eyebrow">CDRRMO REPORTING · DATA EXPORT</p>
+        <p className="eyebrow export-eyebrow">CDRRMO DATA EXPORT</p>
         <h2 id="export-controls-title" className="export-title">
           Export Fire Intelligence CSV
         </h2>
         <p className="export-description">
-          Exports reflect the currently selected area, period, and sensor filters
-          for use in LGU situational reports, GIS mapping, and BFP coordination.
+          Download filtered hotspot coordinates or historical monthly baseline series.
         </p>
       </header>
 
@@ -219,11 +216,11 @@ export function ExportButton({
           <strong className="export-scope-value">{dateWindow}</strong>
         </div>
         <div className="export-scope-item">
-          <span className="export-scope-label">Analysis Mode</span>
+          <span className="export-scope-label">Metric Mode</span>
           <strong className="export-scope-value">{analysisMode}</strong>
         </div>
         <div className="export-scope-item">
-          <span className="export-scope-label">Sensor Filter</span>
+          <span className="export-scope-label">Sensor</span>
           <strong className="export-scope-value">{sensorFilter}</strong>
         </div>
       </div>
@@ -231,21 +228,47 @@ export function ExportButton({
       <div className="export-options-grid">
         <article className="export-option-card">
           <div className="export-option-body">
+            <div className="export-option-top">
+              <span className="export-option-tag">GIS &amp; FIELD DISPATCH</span>
+              <span className="export-option-format">CSV · UTF-8</span>
+            </div>
             <h3 className="export-option-title">
-              Hotspot Coordinates CSV (Field &amp; GIS Mapping)
+              Hotspot Coordinates CSV
             </h3>
             <p className="export-option-description">
-              Exports individual satellite thermal detections (
-              <code>latitude</code>, <code>longitude</code>,{" "}
-              <code>acquisitionDatetime</code>, <code>satellite</code>,{" "}
-              <code>instrument</code>, <code>confidence</code>,{" "}
-              <code>brightness</code>) for mapping in QGIS/ArcGIS or sharing
-              coordinates with BFP/Barangay responders.
+              Point coordinates, sensor source, radiative power (FRP), and UTC timestamps.
             </p>
-            <p className="export-option-meta">
-              <span>Columns: {HOTSPOT_CSV_COLUMNS.join(", ")}</span>
-              <span>File: {hotspotFilename}</span>
-            </p>
+            <div
+              className="export-preview-metrics"
+              aria-label="Hotspot CSV preview metrics"
+            >
+              <div className="export-preview-item">
+                <span className="export-preview-label">Coordinates</span>
+                <span className="export-preview-value">Lat / Lon (WGS84)</span>
+              </div>
+              <div className="export-preview-item">
+                <span className="export-preview-label">Intensity</span>
+                <span className="export-preview-value">FRP (MW) &amp; Confidence</span>
+              </div>
+              <div className="export-preview-item">
+                <span className="export-preview-label">Source</span>
+                <span className="export-preview-value">VIIRS 375m / MODIS 1km</span>
+              </div>
+            </div>
+            <div
+              className="export-column-pills"
+              aria-label="Included hotspot CSV columns"
+            >
+              {HOTSPOT_CSV_COLUMNS.map((column) => (
+                <span key={column} className="export-column-pill">
+                  {column}
+                </span>
+              ))}
+            </div>
+            <div className="export-file-badge" title={hotspotFilename}>
+              <span className="export-file-badge-label">OUTPUT</span>
+              <code className="export-file-badge-name">{hotspotFilename}</code>
+            </div>
           </div>
           <div className="export-actions">
             <button
@@ -263,20 +286,47 @@ export function ExportButton({
 
         <article className="export-option-card">
           <div className="export-option-body">
+            <div className="export-option-top">
+              <span className="export-option-tag">CDRRMO BRIEFING SERIES</span>
+              <span className="export-option-format">CSV · UTF-8</span>
+            </div>
             <h3 className="export-option-title">
-              Monthly Baseline &amp; Anomaly CSV (CDRRMO Situation Report)
+              Monthly Baseline &amp; Anomaly CSV
             </h3>
             <p className="export-option-description">
-              Exports the full historical monthly series (<code>year</code>,{" "}
-              <code>month</code>, <code>metric</code>, <code>count</code>,{" "}
-              <code>estimated</code>, <code>historicalMedian</code>,{" "}
-              <code>anomalyPercent</code>, <code>label</code>) for LGU briefings
-              and seasonal trend tables.
+              Multi-year monthly counts, historical median baseline, and anomaly percentages.
             </p>
-            <p className="export-option-meta">
-              <span>Columns: {ANALYTICS_CSV_COLUMNS.join(", ")}</span>
-              <span>File: {analyticsFilename}</span>
-            </p>
+            <div
+              className="export-preview-metrics"
+              aria-label="Monthly baseline CSV preview metrics"
+            >
+              <div className="export-preview-item">
+                <span className="export-preview-label">Time Series</span>
+                <span className="export-preview-value">Monthly UTC Counts</span>
+              </div>
+              <div className="export-preview-item">
+                <span className="export-preview-label">Benchmark</span>
+                <span className="export-preview-value">Same-Month Median</span>
+              </div>
+              <div className="export-preview-item">
+                <span className="export-preview-label">Deviation</span>
+                <span className="export-preview-value">Anomaly % &amp; Status</span>
+              </div>
+            </div>
+            <div
+              className="export-column-pills"
+              aria-label="Included analytics CSV columns"
+            >
+              {ANALYTICS_CSV_COLUMNS.map((column) => (
+                <span key={column} className="export-column-pill">
+                  {column}
+                </span>
+              ))}
+            </div>
+            <div className="export-file-badge" title={analyticsFilename}>
+              <span className="export-file-badge-label">OUTPUT</span>
+              <code className="export-file-badge-name">{analyticsFilename}</code>
+            </div>
           </div>
           <div className="export-actions">
             <button
@@ -286,8 +336,8 @@ export function ExportButton({
               className="export-button export-button-primary"
             >
               {activeExport === "analytics"
-                ? "Preparing Analytics CSV..."
-                : "Download Analytics CSV"}
+                ? "Preparing Monthly Baseline CSV..."
+                : "Download Monthly Baseline CSV"}
             </button>
           </div>
         </article>

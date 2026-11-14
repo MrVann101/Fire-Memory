@@ -108,70 +108,107 @@ export default function MapView({
         )}
       </div>
 
-      <div className="map-metadata">
-        <p className="map-attribution">
-          {isLiveData
-            ? "Cloud-free satellite land basemap (NASA EOSDIS GIBS Blue Marble & Esri World Imagery) with NASA reference borders and live NASA FIRMS thermal hotspot layer."
-            : `Cloud-free satellite land basemap (NASA EOSDIS GIBS Blue Marble & Esri World Imagery) with NASA reference borders and NASA FIRMS historical detections${imageryDate ? ` (reference period: ${imageryDate})` : ""}.`}{" "}
-          Hotspots indicate satellite-detected heat sources—coordinate with BFP
-          or barangay responders to verify on the ground.
-        </p>
-        <p className="map-drilldown-note">
-          Zoom to level 10 or closer to view sensor scan footprints: solid
-          red-orange circles show high-detail VIIRS (375 m) and dashed orange
-          circles show wide-area MODIS (1 km). Circles show satellite scan area,
-          not confirmed burn perimeter.
-        </p>
-        <p className="raw-window">
-          <strong>Map detection window:</strong>{" "}
-          {rawWindow
-            ? `${rawWindow.start} to ${rawWindow.end} (UTC)`
-            : response
-              ? "No point detections available for this date range."
-              : resource.error
-                ? "Unavailable because hotspot data failed to load."
-                : "Loading selected period…"}
-        </p>
-        {isLiveData && (
-          <p className="map-drilldown-note" role="status">
-            Current-period map uses live NASA FIRMS thermal observations for
-            CDRRMO situational monitoring. Monthly historical baseline analytics
-            remain unchanged.
-          </p>
-        )}
-        {response && (
-          <div className="map-response-meta" aria-live="polite">
-            <span>
-              {response.returned.toLocaleString("en-US")} of{" "}
-              {response.total.toLocaleString("en-US")} thermal hotspots shown
+      <div className="map-metadata" aria-label="Hotspot intensity scale">
+        <div
+          className="map-legend-header"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "8px",
+          }}
+        >
+          <span
+            className="map-legend-title"
+            style={{
+              fontSize: "11px",
+              fontWeight: 700,
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              color: "var(--foreground)",
+              fontFamily: "var(--font-jetbrains-mono), monospace",
+            }}
+          >
+            Hotspot Intensity Scale
+          </span>
+          {response && (
+            <span
+              className="map-legend-count"
+              style={{
+                fontSize: "11px",
+                fontWeight: 700,
+                color: "var(--accent)",
+                fontFamily: "var(--font-jetbrains-mono), monospace",
+                fontVariantNumeric: "tabular-nums",
+              }}
+            >
+              {response.returned.toLocaleString("en-US")} active
             </span>
-            {response.truncated && (
-              <span className="truncation-note" role="status">
-                Result limited to {response.returned.toLocaleString("en-US")}{" "}
-                points; zoom or narrow the region to explore.
-              </span>
-            )}
-          </div>
-        )}
-        {isNationalView && childrenResource.isLoading && (
-          <p className="map-drilldown-note" role="status">
-            Loading province comparison bubbles…
-          </p>
-        )}
-        {isNationalView && childrenResource.error && (
-          <p className="map-drilldown-note map-error-text" role="alert">
-            Province comparison is unavailable: {childrenResource.error.message}
-          </p>
-        )}
-        {isNationalView &&
-          childrenResource.data &&
-          childrenResource.data.length > 0 && (
-            <p className="map-drilldown-note">
-              Orange-to-red province bubbles show relative hotspot volume at
-              each province’s approximate center. Select a bubble to inspect
-              that province.
-            </p>
           )}
+        </div>
+
+        <div
+          className="map-intensity-scale"
+          role="list"
+          aria-label="Hotspot intensity levels"
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+            gap: "6px",
+          }}
+        >
+          {[
+            { label: "Low", color: "var(--hotspot-low, #fb923c)" },
+            { label: "Moderate", color: "var(--hotspot-moderate, #f97316)" },
+            { label: "High", color: "var(--hotspot-high, #ea580c)" },
+            { label: "Very High", color: "var(--hotspot-very-high, #ef4444)" },
+          ].map((step) => (
+            <div
+              key={step.label}
+              className="map-intensity-step"
+              role="listitem"
+              style={{ display: "grid", gap: "4px" }}
+            >
+              <span
+                className="map-intensity-swatch"
+                aria-hidden="true"
+                style={{
+                  display: "block",
+                  height: "6px",
+                  borderRadius: "999px",
+                  background: step.color,
+                }}
+              />
+              <span
+                className="map-intensity-label"
+                style={{
+                  fontSize: "10px",
+                  fontWeight: 600,
+                  color: "var(--muted)",
+                  fontFamily: "var(--font-jetbrains-mono), monospace",
+                  lineHeight: 1.2,
+                }}
+              >
+                {step.label}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        <p
+          className="map-legend-sub"
+          style={{
+            margin: 0,
+            fontSize: "10px",
+            color: "var(--muted)",
+            fontFamily: "var(--font-jetbrains-mono), monospace",
+            fontVariantNumeric: "tabular-nums",
+            lineHeight: 1.3,
+          }}
+        >
+          VIIRS 375m · MODIS 1km
+          {rawWindow ? ` · ${rawWindow.start} to ${rawWindow.end}` : ""}
+        </p>
       </div>
     </section>
   );

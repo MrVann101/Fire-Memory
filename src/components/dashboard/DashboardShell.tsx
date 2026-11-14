@@ -6,7 +6,6 @@ import type {
   AnalyticsSummary,
   BBox,
   HarmonizationResponse,
-  Hotspot,
   HotspotFilters,
   Region,
 } from "@/contracts/types";
@@ -17,6 +16,7 @@ import {
   OverlapChart,
 } from "@/components/charts/AnalyticsPanels";
 import { AssistantPanel } from "@/components/assistant/AssistantPanel";
+import { FireMemoryLogo } from "@/components/brand/FireMemoryLogo";
 import { ExportButton } from "@/components/export/ExportButton";
 import MapView from "@/components/map/MapView";
 import { useDashboardFilters } from "@/components/dashboard/DashboardFiltersProvider";
@@ -31,6 +31,7 @@ import {
   useSummary,
 } from "@/hooks/useDashboardData";
 import type { ClientResource } from "@/hooks/useClientResource";
+import { countLiveCellDays } from "@/lib/analytics/liveCounts";
 
 type LiveRange = "today" | "7days" | "month" | "year";
 
@@ -58,22 +59,6 @@ function getLiveDateRange(range: LiveRange): { start: string; end: string } {
   }
 
   return { start: startDate.toISOString().slice(0, 10), end };
-}
-
-function countLiveCellDays(
-  hotspots: Hotspot[],
-  instrument: "MODIS" | "VIIRS"
-): number {
-  const cells = new Set(
-    hotspots
-      .filter((hotspot) => hotspot.instrument === instrument)
-      .map((hotspot) => {
-        const latitudeCell = Math.floor(hotspot.latitude * 100);
-        const longitudeCell = Math.floor(hotspot.longitude * 100);
-        return `${hotspot.acquisitionDatetime.slice(0, 10)}:${latitudeCell}:${longitudeCell}`;
-      })
-  );
-  return cells.size;
 }
 
 function formatSummaryNumber(
@@ -199,12 +184,6 @@ function DashboardIcon({
     </svg>
   );
 }
-const DATA_ATTRIBUTION =
-  "Data: NASA Fire Information for Resource Management System (FIRMS), MODIS and VIIRS active-fire products. Product names, retrieval dates, and attribution requirements are listed in the data documentation.";
-const DATA_LIMITATIONS =
-  "These are satellite detections of thermal anomalies, not confirmed fires or a complete incident record. Coverage, sensor sensitivity, boundaries, and missing observations affect counts. MODIS-only values converted to the VIIRS target are estimates.";
-const HARMONIZATION_NOTE =
-  "The series uses UTC monthly active 0.01-degree cell-days and overlap-period calibration to a VIIRS-equivalent scale. The factor, validation error, overlap years, estimated years, and limitations are shown with the result.";
 function parsePeriod(value: string) {
   const match = /^(\d{4})-(\d{2})$/.exec(value);
   if (!match) {
@@ -555,14 +534,6 @@ export default function DashboardShell({
     children.error,
     harmonization.error,
   ].filter((error): error is Error => error !== null);
-  const hasDataLoading =
-    regions.isLoading ||
-    hotspotWindow.isLoading ||
-    summary.isLoading ||
-    calendar.isLoading ||
-    hotspots.isLoading ||
-    children.isLoading ||
-    harmonization.isLoading;
   const latestUpdate =
     summary.data?.lastUpdated ??
     hotspots.data?.lastUpdated ??
@@ -616,7 +587,7 @@ export default function DashboardShell({
       >
         <Link className="sidebar-brand" href="/" aria-label="FIRE MEMORY home">
           <span className="sidebar-brand-mark" aria-hidden="true">
-            FM
+            <FireMemoryLogo />
           </span>
           <span className="sidebar-brand-copy">
             <span className="sidebar-brand-name">FIRE MEMORY</span>
@@ -1064,10 +1035,10 @@ export default function DashboardShell({
           <button
             type="button"
             className={`map-assistant-trigger${isAssistantOpen ? " is-open" : ""}`}
-            aria-label="Open CDRRMO Advisory AI"
+            aria-label="Open Advisory AI"
             aria-expanded={isAssistantOpen}
             aria-controls="map-assistant-dock"
-            title="CDRRMO Advisory AI"
+            title="Advisory AI"
             onClick={() => setIsAssistantOpen((open) => !open)}
           >
             <svg
@@ -1082,7 +1053,7 @@ export default function DashboardShell({
               <path d="M12 22c4.4 0 7.5-3.1 7.5-7.4 0-3.5-2-6.5-4.7-8.9-.2 2.3-1.1 3.8-2.8 5.2-.3-3.5-2.2-6.7-5.3-8.8.5 4.1-2.2 6.4-2.2 11.3C4.5 18.2 7.6 22 12 22Z" />
               <path d="M12 20c-1.6 0-2.8-1.2-2.8-2.9 0-1.5 1-2.4 2.5-3.8.5 1.4 1.3 2.1 2.1 2.8.9 1.6.1 3.9-1.8 3.9Z" />
             </svg>
-            <span>CDRRMO Advisory AI</span>
+            <span>Advisory AI</span>
           </button>
           <div
             id="map-assistant-dock"
@@ -1091,6 +1062,12 @@ export default function DashboardShell({
           >
             <AssistantPanel
               summary={summary.data ?? null}
+              liveCounts={liveCounts}
+              hotspots={hotspots.data?.hotspots ?? []}
+              childCounts={children.data ?? []}
+              regions={regions.data ?? []}
+              selectedRegion={selectedRegion}
+              onSelectRegion={handleSelectRegion}
               onClose={() => setIsAssistantOpen(false)}
             />
           </div>
@@ -1334,9 +1311,16 @@ export default function DashboardShell({
             )}
             {resolvedFeature === "anomaly" && (
               <div className="analytics-stack">
-                <AnomalyPanel resource={summary} />
+                <AnomalyPanel
+                  resource={summary}
+                  calendar={calendar.data ?? null}
+                  liveCounts={liveCounts}
+                />
+                <OverlapChart
+                  resource={harmonization}
+                  summary={summary.data ?? null}
+                />
                 <HarmonizationPanel resource={harmonization} />
-                <OverlapChart resource={harmonization} />
               </div>
             )}
             {resolvedFeature === "export" &&
@@ -1358,78 +1342,47 @@ export default function DashboardShell({
                   <p>Select a region and period to enable the data exports.</p>
                 </section>
               ))}
-            <footer className="page-footer">
-              <p>FIRE MEMORY · Historical satellite detections</p>
-              <p>{DATA_ATTRIBUTION}</p>
-              <p>{DATA_LIMITATIONS}</p>
-              <p>{HARMONIZATION_NOTE}</p>
-              {summary.data?.notes[0] && (
-                <p>Selected period: {summary.data.notes[0]}</p>
-              )}
+            <footer className="page-footer page-footer-compact">
+              <p>FIRE MEMORY · NASA FIRMS MODIS &amp; VIIRS Historical Archive (UTC)</p>
             </footer>
           </section>
         )}
-        {resolvedFeature === "map" && (
+        {resolvedFeature === "map" && dataErrors.length > 0 && (
         <div className="dashboard-secondary">
         <section
-          className={`data-state-panel${dataErrors.length ? " data-state-error" : ""}`}
+          className="data-state-panel data-state-error"
           aria-labelledby="data-state-title"
-          aria-live="polite"
+          role="alert"
         >
           <span className="data-state-icon" aria-hidden="true">
-            {dataErrors.length ? "!" : hasDataLoading ? "…" : "i"}
+            !
           </span>
           <div>
             <h2 id="data-state-title">
-              {dataErrors.length
-                ? "Some dashboard data could not be loaded"
-                : hasDataLoading
-                  ? "Loading selected dashboard data"
-                  : summary.data
-                    ? "Dashboard data loaded"
-                    : "Choose a region and month"}
+              Some dashboard data could not be loaded
             </h2>
-            {dataErrors.length ? (
-              <>
-                <ul className="data-error-list">
-                  {dataErrors.map((error, index) => (
-                    <li key={`${error.message}-${index}`}>{error.message}</li>
-                  ))}
-                </ul>
-                <button
-                  type="button"
-                  className="retry-button"
-                  onClick={() => {
-                    if (regions.error) regions.retry();
-                    if (hotspotWindow.error) hotspotWindow.retry();
-                    if (summary.error) summary.retry();
-                    if (calendar.error) calendar.retry();
-                    if (hotspots.error) hotspots.retry();
-                    if (children.error) children.retry();
-                    if (harmonization.error) harmonization.retry();
-                  }}
-                >
-                  Retry failed requests
-                </button>
-              </>
-            ) : (
-              <p>
-                {hasDataLoading
-                  ? "Loading the selected region, period, and analytics responses."
-                  : summary.data
-                    ? "Satellite detections are observations, not confirmation of a fire incident."
-                    : "Select a region and UTC month to load available satellite-detection summaries."}
-              </p>
-            )}
+            <ul className="data-error-list">
+              {dataErrors.map((error, index) => (
+                <li key={`${error.message}-${index}`}>{error.message}</li>
+              ))}
+            </ul>
+            <button
+              type="button"
+              className="retry-button"
+              onClick={() => {
+                if (regions.error) regions.retry();
+                if (hotspotWindow.error) hotspotWindow.retry();
+                if (summary.error) summary.retry();
+                if (calendar.error) calendar.retry();
+                if (hotspots.error) hotspots.retry();
+                if (children.error) children.retry();
+                if (harmonization.error) harmonization.retry();
+              }}
+            >
+              Retry failed requests
+            </button>
           </div>
         </section>
-        <footer className="page-footer">
-          <p>FIRE MEMORY · Historical satellite detections</p>
-          <p>{DATA_ATTRIBUTION}</p>
-          <p>{DATA_LIMITATIONS}</p>
-          <p>{HARMONIZATION_NOTE}</p>
-          {summary.data?.notes[0] && <p>Selected period: {summary.data.notes[0]}</p>}
-        </footer>
         </div>
         )}
       </main>

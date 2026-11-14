@@ -9,7 +9,10 @@ import type {
   Hotspot,
   Region,
 } from "@/contracts/types";
-import { MapContainer, TileLayer, WMSTileLayer, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, useMap } from "react-leaflet";
+
+const TRANSPARENT_TILE_DATA_URI =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
 type ActivityBand = "low" | "moderate" | "high" | "very-high";
 type BubbleBand = ActivityBand | "no-data";
@@ -225,7 +228,12 @@ function HotspotFootprintLayer({ hotspots }: { hotspots: Hotspot[] }) {
         return;
       }
 
+      const bounds = map.getBounds().pad(0.25);
+
       for (const hotspot of hotspots) {
+        if (!bounds.contains([hotspot.latitude, hotspot.longitude])) {
+          continue;
+        }
         const isViirs = hotspot.instrument === "VIIRS";
         const radius = getFootprintRadius(hotspot);
         const footprint = L.circle([hotspot.latitude, hotspot.longitude], {
@@ -249,9 +257,11 @@ function HotspotFootprintLayer({ hotspots }: { hotspots: Hotspot[] }) {
     map.addLayer(layer);
     renderFootprints();
     map.on("zoomend", renderFootprints);
+    map.on("moveend", renderFootprints);
 
     return () => {
       map.off("zoomend", renderFootprints);
+      map.off("moveend", renderFootprints);
       map.removeLayer(layer);
     };
   }, [hotspots, map]);
@@ -518,8 +528,6 @@ export default function LeafletCanvas({
   selectedRegion,
   childCounts,
   regions,
-  useFirmsWms,
-  firmsWmsLayer,
   onSelectRegion,
   drawRectangle,
   onRectangleComplete,
@@ -529,8 +537,8 @@ export default function LeafletCanvas({
   childCounts: ChildCount[];
   regions: Region[];
   imageryDate?: string | null;
-  useFirmsWms: boolean;
-  firmsWmsLayer: string;
+  useFirmsWms?: boolean;
+  firmsWmsLayer?: string;
   onSelectRegion: (regionId: string) => void;
   drawRectangle: boolean;
   onRectangleComplete: (bbox: BBox) => void;
@@ -549,47 +557,37 @@ export default function LeafletCanvas({
       aria-label="Cloud-free Philippine thermal hotspot monitoring map"
     >
       <TileLayer
+        key="carto-voyager-underlay"
+        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+        url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}{r}.png"
+        minZoom={4}
+        maxZoom={18}
+        maxNativeZoom={18}
+        keepBuffer={4}
+        errorTileUrl={TRANSPARENT_TILE_DATA_URI}
+      />
+      <TileLayer
         key="esri-world-imagery-land"
         attribution="Tiles &copy; Esri &mdash; Source: Esri, Maxar, Earthstar Geographics, and the GIS User Community"
         url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
         minZoom={4}
         maxZoom={18}
+        maxNativeZoom={13}
         keepBuffer={4}
+        errorTileUrl={TRANSPARENT_TILE_DATA_URI}
       />
       <TileLayer
-        key="gibs-reference-features"
-        attribution='<a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/global-imagery-browse-services-gibs">NASA EOSDIS GIBS</a> · Reference coastlines &amp; borders'
-        url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Features_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png"
+        key="esri-reference-boundaries-labels"
+        attribution="Boundaries &amp; Labels &copy; Esri"
+        url="https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}"
         minZoom={4}
         maxZoom={18}
         maxNativeZoom={13}
         keepBuffer={4}
-        opacity={0.75}
-      />
-      <TileLayer
-        key="gibs-reference-labels"
-        attribution="NASA EOSDIS GIBS · Place labels"
-        url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Labels_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png"
-        minZoom={4}
-        maxZoom={18}
-        maxNativeZoom={13}
-        keepBuffer={4}
+        opacity={0.88}
+        errorTileUrl={TRANSPARENT_TILE_DATA_URI}
       />
       <RegionViewport region={selectedRegion} />
-      {useFirmsWms && (
-        <WMSTileLayer
-          url="/api/firms/wms"
-          params={{
-            layers: firmsWmsLayer,
-            format: "image/png",
-            transparent: true,
-            version: "1.1.1",
-          }}
-          attribution="NASA FIRMS Active Fire WMS"
-          opacity={0.9}
-          keepBuffer={4}
-        />
-      )}
       <DetectionLayer hotspots={hotspots} />
       <HotspotFootprintLayer hotspots={hotspots} />
       <ChildBubbleLayer

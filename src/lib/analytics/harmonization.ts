@@ -186,7 +186,43 @@ export async function getHarmonization(
 
   let rows = (data ?? []) as MonthlyOverlapRow[];
 
-  if (rows.length === 0 && resolved?.region.level === "country") {
+  if (rows.length === 0 && resolved?.region.level === "region") {
+    const { data: childRegions, error: childError } = await supabase
+      .from("regions")
+      .select("id")
+      .eq("parent_id", resolved.dbId)
+      .eq("level", "province");
+    if (childError) {
+      throw new DatabaseProviderError(
+        "Failed to resolve provinces for regional overlap series."
+      );
+    }
+    const childIds = ((childRegions ?? []) as Array<{ id: string }>).map(
+      (c) => c.id
+    );
+    if (childIds.length > 0) {
+      const { data: regData, error: regError } = await supabase
+        .from("monthly_counts")
+        .select("year, month, instrument, active_cell_days, has_coverage")
+        .in("region_id", childIds)
+        .in("year", info.overlapYears)
+        .eq("has_coverage", true)
+        .order("year", { ascending: true })
+        .order("month", { ascending: true });
+      if (regError) {
+        throw new DatabaseProviderError(
+          "Failed to retrieve regional overlap series for harmonization."
+        );
+      }
+      rows = (regData ?? []) as MonthlyOverlapRow[];
+    }
+  }
+
+  if (
+    rows.length === 0 &&
+    (resolved?.region.level === "country" ||
+      (resolved?.region.level === "region" && info.factorScope === "national"))
+  ) {
     const { data: natData, error: natError } = await supabase.rpc(
       "get_national_overlap",
       { p_overlap_years: info.overlapYears }

@@ -52,6 +52,11 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     ) {
       throw new AppValidationError("start and end must be YYYY-MM-DD.");
     }
+    if (start && end && start > end) {
+      throw new AppValidationError(
+        "start must be on or before end."
+      );
+    }
 
     const limit = Number(searchParams.get("limit") ?? "2000");
     if (!Number.isInteger(limit) || limit < 1 || limit > 10000) {
@@ -61,6 +66,18 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
 
     const typedInstrument = instrument as "MODIS" | "VIIRS" | "ALL";
+    const requestedSpanDays =
+      start && end
+        ? Math.max(
+            1,
+            Math.round(
+              (new Date(`${end}T00:00:00.000Z`).getTime() -
+                new Date(`${start}T00:00:00.000Z`).getTime()) /
+                86_400_000
+            ) + 1
+          )
+        : days;
+
     try {
       const result = await fetchFirmsArea({
         bbox,
@@ -95,27 +112,53 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
       const fallbackEnd =
         windowInfo.rawWindow?.end ?? end ?? date ?? new Date().toISOString().slice(0, 10);
       const fallbackStartDate = new Date(`${fallbackEnd}T00:00:00.000Z`);
-      fallbackStartDate.setUTCDate(fallbackStartDate.getUTCDate() - (days - 1));
+      fallbackStartDate.setUTCDate(
+        fallbackStartDate.getUTCDate() - (requestedSpanDays - 1)
+      );
       const fallbackStart =
         start && windowInfo.rawWindow && start <= windowInfo.rawWindow.end
           ? start
           : fallbackStartDate.toISOString().slice(0, 10);
 
-      const archiveResult = await queryHotspots(
-        {
-          regionId: "custom",
-          bbox,
-          start: fallbackStart,
-          end: fallbackEnd,
-          instrument: typedInstrument,
-        },
-        limit
-      );
+      try {
+        const archiveResult = await queryHotspots(
+          {
+            regionId: "custom",
+            bbox,
+            start: fallbackStart,
+            end: fallbackEnd,
+            instrument: typedInstrument,
+          },
+          limit
+        );
 
-      return NextResponse.json(archiveResult, {
-        status: 200,
-        headers: { "Cache-Control": "no-store" },
-      });
+        return NextResponse.json(archiveResult, {
+          status: 200,
+          headers: { "Cache-Control": "no-store" },
+        });
+      } catch {
+        return NextResponse.json(
+          {
+            filters: {
+              regionId: "custom",
+              bbox,
+              start: fallbackStart,
+              end: fallbackEnd,
+              instrument: typedInstrument,
+            },
+            total: 0,
+            returned: 0,
+            truncated: false,
+            hotspots: [],
+            rawWindow: windowInfo.rawWindow,
+            lastUpdated: windowInfo.lastUpdated,
+          },
+          {
+            status: 200,
+            headers: { "Cache-Control": "no-store" },
+          }
+        );
+      }
     }
   } catch (error) {
     return errorToHttpResponse(error, {

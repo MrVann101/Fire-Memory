@@ -156,7 +156,7 @@ async function fetchSource(
   try {
     response = await fetch(path.join("/"), {
       cache: "no-store",
-      signal: AbortSignal.timeout(15_000),
+      signal: AbortSignal.timeout(5_000),
     });
   } catch {
     throw new DatabaseProviderError("FIRMS recent-data request failed.");
@@ -257,57 +257,58 @@ export async function fetchFirmsArea(
       Math.round((endMs - startMs) / 86_400_000) + 1
     );
 
-    // NASA FIRMS NRT sources only retain recent days (~7-10 days).
-    // Cap date-chunked NRT requests to the latest 10 days of the requested window
-    // to prevent rate-limit exhaustion on month/year ranges.
-    const maxNrtSpanDays = 10;
-    const effectiveStartDate = new Date(endMs);
-    effectiveStartDate.setUTCDate(
-      effectiveStartDate.getUTCDate() -
-        Math.min(requestedSpanDays, maxNrtSpanDays) +
-        1
-    );
-    let cursor =
-      effectiveStartDate.toISOString().slice(0, 10) > query.start
-        ? effectiveStartDate.toISOString().slice(0, 10)
-        : query.start;
-
-    while (cursor <= query.end) {
-      const cursorDate = new Date(`${cursor}T00:00:00.000Z`);
-      const chunkEnd = new Date(cursorDate);
-      chunkEnd.setUTCDate(chunkEnd.getUTCDate() + MAX_DAY_RANGE - 1);
-      const end =
-        chunkEnd.toISOString().slice(0, 10) < query.end
-          ? chunkEnd.toISOString().slice(0, 10)
-          : query.end;
-      const days =
-        Math.round(
-          (new Date(`${end}T00:00:00.000Z`).getTime() - cursorDate.getTime()) /
-            86_400_000
-        ) + 1;
-      const chunkResult = await fetchSourcesSettled(mapKey, sources, {
-        ...query,
-        days,
-        date: cursor,
-      });
-      collectedHotspots.push(...chunkResult.hotspots);
-      totalSucceededCalls += chunkResult.succeededCount;
-      cursorDate.setUTCDate(cursorDate.getUTCDate() + days);
-      cursor = cursorDate.toISOString().slice(0, 10);
-    }
-
-    // If date-pinned NRT queries returned 0 hotspots (e.g. simulated 2026 clock skew
-    // vs NASA's real-world NRT clock) or failed, fetch the latest live NRT window
-    // without a pinned date so NASA returns its most recent active-fire observations.
-    if (collectedHotspots.length === 0) {
-      const fallbackDays = Math.min(MAX_DAY_RANGE, requestedSpanDays);
+    if (requestedSpanDays > 10) {
+      // NASA FIRMS NRT sources (MODIS_NRT, VIIRS_SNPP_NRT, VIIRS_NOAA20_NRT)
+      // only hold the last ~7 days of near-real-time data. For wider windows
+      // (such as "month" or "year"), query only the single most recent 5-day
+      // NRT window instead of running sequential historical chunk requests.
       const latestResult = await fetchSourcesSettled(mapKey, sources, {
         ...query,
-        days: fallbackDays,
+        days: MAX_DAY_RANGE,
         date: undefined,
       });
       collectedHotspots.push(...latestResult.hotspots);
       totalSucceededCalls += latestResult.succeededCount;
+    } else {
+      let cursor = query.start;
+
+      while (cursor <= query.end) {
+        const cursorDate = new Date(`${cursor}T00:00:00.000Z`);
+        const chunkEnd = new Date(cursorDate);
+        chunkEnd.setUTCDate(chunkEnd.getUTCDate() + MAX_DAY_RANGE - 1);
+        const end =
+          chunkEnd.toISOString().slice(0, 10) < query.end
+            ? chunkEnd.toISOString().slice(0, 10)
+            : query.end;
+        const days =
+          Math.round(
+            (new Date(`${end}T00:00:00.000Z`).getTime() - cursorDate.getTime()) /
+              86_400_000
+          ) + 1;
+        const chunkResult = await fetchSourcesSettled(mapKey, sources, {
+          ...query,
+          days,
+          date: cursor,
+        });
+        collectedHotspots.push(...chunkResult.hotspots);
+        totalSucceededCalls += chunkResult.succeededCount;
+        cursorDate.setUTCDate(cursorDate.getUTCDate() + days);
+        cursor = cursorDate.toISOString().slice(0, 10);
+      }
+
+      // If date-pinned NRT queries succeeded but returned 0 hotspots (e.g. simulated
+      // 2026 clock skew vs NASA's real-world NRT clock), fetch the latest live NRT
+      // window without a pinned date so NASA returns its most recent observations.
+      if (totalSucceededCalls > 0 && collectedHotspots.length === 0) {
+        const fallbackDays = Math.min(MAX_DAY_RANGE, requestedSpanDays);
+        const latestResult = await fetchSourcesSettled(mapKey, sources, {
+          ...query,
+          days: fallbackDays,
+          date: undefined,
+        });
+        collectedHotspots.push(...latestResult.hotspots);
+        totalSucceededCalls += latestResult.succeededCount;
+      }
     }
   } else {
     const latestResult = await fetchSourcesSettled(mapKey, sources, {

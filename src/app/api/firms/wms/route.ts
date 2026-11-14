@@ -18,6 +18,44 @@ const TRANSPARENT_PNG_BYTES = Uint8Array.from(
   )
 );
 
+const PNG_SIGNATURE = [
+  0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+] as const;
+
+function hasTrnsChunk(buffer: Uint8Array): boolean {
+  for (let i = 8; i <= buffer.byteLength - 4; i += 1) {
+    if (
+      buffer[i] === 0x74 &&
+      buffer[i + 1] === 0x52 &&
+      buffer[i + 2] === 0x4e &&
+      buffer[i + 3] === 0x53
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isTransparentPngBuffer(buffer: Uint8Array): boolean {
+  if (buffer.byteLength < 33) {
+    return false;
+  }
+  for (let i = 0; i < PNG_SIGNATURE.length; i += 1) {
+    if (buffer[i] !== PNG_SIGNATURE[i]) {
+      return false;
+    }
+  }
+
+  const colorType = buffer[25];
+  if (colorType === 6 || colorType === 4) {
+    return true;
+  }
+  if (colorType === 3 || colorType === 2 || colorType === 0) {
+    return hasTrnsChunk(buffer);
+  }
+  return false;
+}
+
 function getParamCaseInsensitive(
   searchParams: URLSearchParams,
   name: string
@@ -71,7 +109,7 @@ export async function GET(request: NextRequest): Promise<Response> {
     upstreamUrl.searchParams.set("VERSION", "1.1.1");
     upstreamUrl.searchParams.set("LAYERS", layers);
     upstreamUrl.searchParams.set("FORMAT", "image/png");
-    upstreamUrl.searchParams.set("TRANSPARENT", "true");
+    upstreamUrl.searchParams.set("TRANSPARENT", "TRUE");
     upstreamUrl.searchParams.set(
       "STYLES",
       getParamCaseInsensitive(searchParams, "styles") ?? ""
@@ -102,10 +140,15 @@ export async function GET(request: NextRequest): Promise<Response> {
       return transparentPngResponse();
     }
 
-    return new NextResponse(await upstream.arrayBuffer(), {
+    const bytes = new Uint8Array(await upstream.arrayBuffer());
+    if (!isTransparentPngBuffer(bytes)) {
+      return transparentPngResponse();
+    }
+
+    return new NextResponse(bytes, {
       status: 200,
       headers: {
-        "Cache-Control": "no-store",
+        "Cache-Control": "public, max-age=300, stale-while-revalidate=600",
         "Content-Type": contentType || "image/png",
       },
     });
