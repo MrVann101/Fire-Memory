@@ -1,2 +1,6 @@
 *
 !.gitignore
+!modis/
+!modis/**
+!viirs-noaa20/
+!viirs-noaa20/**
