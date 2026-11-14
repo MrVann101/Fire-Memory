@@ -235,12 +235,12 @@ data.
 - [ ] Raw/harmonized toggle updates map-related summary/calendar state.
 - [x] Sensor filter is enabled only for raw.
 - [ ] Null, zero, estimated, and ordinary cells have distinct text/patterns.
-- [x] Color ramp is colorblind-safe with legend and printed/focusable counts.
-- [x] Anomaly panel shows label, icon, text, median, years, and notes.
-- [x] Harmonization panel shows method, factor, overlap, error, and estimates.
-- [x] Overlap chart renders MODIS, scaled MODIS, and VIIRS.
+- [ ] Color ramp is colorblind-safe with legend and printed/focusable counts.
+- [ ] Anomaly panel shows label, icon, text, median, years, and notes.
+- [ ] Harmonization panel shows method, factor, overlap, error, and estimates.
+- [ ] Overlap chart renders MODIS, scaled MODIS, and VIIRS.
 - [ ] Map uses client-only Leaflet and remains usable with dense mock data.
-- [x] Raw window, attribution, limitations, UTC note, and last-updated text
+- [ ] Raw window, attribution, limitations, UTC note, and last-updated text
       are visible.
 - [ ] `NEXT_PUBLIC_USE_MOCKS=false` is the only mode change needed for real
       responses.
