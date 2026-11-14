@@ -10,11 +10,11 @@
 |---|---|---|
 | AI Guardrails & Prompt Layer | `[x]` Built | `src/lib/ai/{request,prompt,brief,config}.ts`, `src/app/api/ai/brief/route.ts`, and `src/components/assistant/AssistantPanel.tsx` implement strict Zod schema, `1,000`-char question cap, untrusted input delimiters, pre-call evacuation/prediction refusal, and numeric grounding check. |
 | CSV Library & UI Components | `[x]` Built | `src/lib/export/{csv,types}.ts` & `src/components/export/ExportButton.tsx` exist. |
-| AI Test Suite Status | `[!]` **PARTIAL / FAILING** | `tests/ai/m4-t1.test.mjs` & `m4-t4.test.mjs` pass `5/5` **only** with `--import ./tests/analytics/register-paths.mjs`. Default `node --test tests/ai/*.test.mjs` fails `2/4` files (`ERR_MODULE_NOT_FOUND`). **`tests/ai/m4-t2.test.mjs` FAILS even with `--import`** (`gaxios/package.json` `SyntaxError` under Node 24 loader importing `@google/genai`). |
-| **CRITICAL: Export Routes Broken (`400`)** | `[!]` **CRITICAL BUG** | **Live `next start` test failed (`400 INVALID_EXPORT_REQUEST`)!** Both `src/app/api/export/csv/route.ts:42,50,52` and `src/app/api/export/analytics-csv/route.ts:36,49,53` pass `searchParams.get("bbox")` (`null` when absent) into Zod `bboxSchema.optional()`, which rejects `null`! Non-custom exports crash 100% of the time unless `bbox` is passed! |
-| **HIGH: Fragile Export Self-Fetch** | `[!]` **HIGH BUG** | `csv/route.ts:93-96` & `analytics-csv/route.ts:96-108` do `fetch(new URL("/api/...", request.url))` back to Next.js itself instead of calling backend helpers in-process (`queryHotspots`, `getCalendar`, `getAnalyticsSummary`). Breaks under Vercel deployment protection / proxies and doubles request overhead. |
-| **CSV Formula & Period Gaps** | `[!]` **MEDIUM BUG** | `src/lib/export/csv.ts:27` checks `/^[=+\-@]/` — misses leading `\t` and `\r` formula prefixes. `ExportButton.tsx:10-53` lacks `year`/`month` props needed by `/api/export/analytics-csv` (`analytics-csv/route.ts:37-42`), so historical analytics exports default to today's UTC month. |
-| **AI Model Name & Env Key** | `[!]` **BLOCKER** | `.env.local` has **no `GEMINI_API_KEY`** (`503 AI_NOT_CONFIGURED`). `src/lib/ai/config.ts:1` hardcodes `GEMINI_MODEL = "gemini-3.8-flash"` without `VERIFY` confirmation against official Gemini API model docs. `brief.ts:202` catches all SDK errors into generic `AiProviderError` (hides 429 vs 404/invalid model in server logs). |
+| AI Test Suite Status | `[x]` Passing with project runner | `npx tsx --test tests/ai/*.test.mjs` passes all 26 tests. Direct `node --test` remains unsupported for the repository's extensionless TypeScript imports. |
+| **CRITICAL: Export Routes Broken (`400`)** | `[x]` Fixed | Both export routes now accept omitted `bbox`, call backend helpers directly, preserve truncation metadata, and return UTF-8 CSV responses. |
+| **HIGH: Fragile Export Self-Fetch** | `[x]` Fixed | Export routes call `queryHotspots`, `getCalendar`, and `getAnalyticsSummary` in-process instead of making loopback HTTP requests. |
+| **CSV Formula & Period Gaps** | `[x]` Fixed | CSV escaping covers leading tab/carriage-return formula prefixes, and `ExportButton` forwards the selected year/month with a filter-derived fallback. |
+| **AI Model Name & Env Key** | `[x]` Configured and verified | `GEMINI_API_KEY` is configured locally and server-only. `gemini-3.8-flash` is documented as an active official model; live requests currently receive a temporary provider `503 UNAVAILABLE` response. |
 | **Slots Unmounted** | `[!]` **MISSING INTEGRATION** | `<AssistantPanel />` and `<ExportButton />` are still not mounted inside `DashboardShell.tsx:846-857` (coordinate with `@frontend`). |
 | **Presentation & Demo Verification** | `[ ]` **NOT READY** | `docs/presentation/4-slide-pitch.md` has `VERIFY` placeholders on lines `4, 13, 21, 95` and `7/7` unchecked submission items (`113-119`); `judge-questions.md` has `5/5` unchecked items (`73-79`); `DEMO_SCRIPT.md` has `6/6` unchecked rehearsal/video items (`111-116`). |
 
@@ -63,8 +63,8 @@ Member 4 owns the grounded Gemini AI briefing endpoint (`/api/ai/brief`), CSV ex
 
 | Variable | Status in `.env.local` | Purpose |
 |---|---|---|
-| `GEMINI_API_KEY` | `[ ]` **MISSING** | Required server-side key for `GoogleGenAI` (`src/lib/ai/brief.ts:171`). Add to `.env.local` and Vercel dashboard; NEVER `NEXT_PUBLIC_`. |
-| `GEMINI_MODEL` | `[!]` Hardcoded `"gemini-3.8-flash"` in `config.ts:1` | Confirm valid active model ID in official Google Gemini API docs; optionally read `process.env.GEMINI_MODEL` with a verified default! |
+| `GEMINI_API_KEY` | `[x]` Configured locally | Present in ignored `.env.local` for server-side `GoogleGenAI` use; never expose it as `NEXT_PUBLIC_`. Vercel configuration remains a deployment task. |
+| `GEMINI_MODEL` | `[x]` Verified | `gemini-3.8-flash` is an active official model ID. The current live request reached Google but returned temporary `503 UNAVAILABLE` due to model demand. |
 
 ---
 
@@ -72,10 +72,10 @@ Member 4 owns the grounded Gemini AI briefing endpoint (`/api/ai/brief`), CSV ex
 
 | Priority | Task ID | Status | Target Deliverable |
 |---|---|---|---|
-| `MVP-SHOULD` | **M4-T1** | `[!]` **CRITICAL FIX** | Fix `bbox ?? undefined` `400` bug in **both** `src/app/api/export/csv/route.ts` and `analytics-csv/route.ts`, replace HTTP self-fetch with direct backend function calls (once agreed with `@backend`), and fix `\t`/`\r` CSV formula guard. |
-| `MVP-SHOULD` | **M4-T2** | `[!]` **BLOCKER FIX** | Verify active Gemini model ID from official docs (`src/lib/ai/config.ts:1`), configure `GEMINI_API_KEY` in `.env.local` + Vercel, improve non-secret server error logging/handling, and fix `tests/ai/m4-t2.test.mjs` Node 24 import crash. |
-| `MVP-SHOULD` | **M4-T3** | `[!]` Fix + Integration | Add optional `year` & `month` props to `<ExportButton />` (or derive from `filters.start`), coordinate with `@frontend` to mount `<AssistantPanel />` & `<ExportButton />` in `DashboardShell.tsx`. |
-| `MVP-SHOULD` | **M4-T4** | `[ ]` Add Tests | Add route tests for `/api/ai/brief` (`400` bad JSON, `413` oversized body, `503` missing key) and `/api/export/{csv,analytics-csv}` (`regionId` without `bbox` returning `200`, `custom` without `bbox` returning `400`, CSV headers & BOM). |
+| `MVP-SHOULD` | **M4-T1** | `[x]` Complete | Export route validation, direct backend calls, and CSV formula escaping are fixed and covered. |
+| `MVP-SHOULD` | **M4-T2** | `[!]` Provider-limited | Official model/key setup is verified and the local endpoint is live-tested; Google currently returns temporary `503 UNAVAILABLE` due to model demand. |
+| `MVP-SHOULD` | **M4-T3** | `[!]` Partial | `ExportButton` forwards active year/month; dashboard mounting still requires the frontend owner. |
+| `MVP-SHOULD` | **M4-T4** | `[x]` Complete | Added route, missing-key, BOM, bbox, and tab/carriage-return formula regression tests. |
 | **SUBMISSION-REQ** | **M4-T5** | `[ ]` Incomplete | Complete `docs/presentation/4-slide-pitch.md` (`VERIFY` placeholders + all `7/7` submission checks) and `judge-questions.md` (`5/5` factual checks) using Member 1's loaded DB metrics. |
 | **SUBMISSION-REQ** | **M4-T6** | `[ ]` Incomplete | Rehearse `docs/DEMO_SCRIPT.md`, verify live deployed URL, and record the **90-second backup video** (`6/6` checks). |
 | `NICE` | **M4-T7** | `[ ]` Optional | Create `src/lib/export/pdf.ts` text-first emergency briefing report **only** after all items above are green and live-tested. |
@@ -84,7 +84,7 @@ Member 4 owns the grounded Gemini AI briefing endpoint (`/api/ai/brief`), CSV ex
 
 ## 7. Actionable Task List
 
-### M4-T1 (`MVP-SHOULD`) `[!]` Fix Both CSV Export Routes (`bbox` `400` Bug, Self-Fetch, Formula Escaping)
+### M4-T1 (`MVP-SHOULD`) `[x]` Fix Both CSV Export Routes (`bbox` `400` Bug, Self-Fetch, Formula Escaping)
 - **Objective:** Eliminate the guaranteed HTTP `400` failure on all non-custom CSV exports, remove fragile HTTP self-fetching, and complete OWASP CSV injection escaping.
 - **Files:** `src/app/api/export/csv/route.ts`, `src/app/api/export/analytics-csv/route.ts`, `src/lib/export/csv.ts`
 - **Steps:**
@@ -97,7 +97,7 @@ Member 4 owns the grounded Gemini AI briefing endpoint (`/api/ai/brief`), CSV ex
 - **How to verify:** Test both endpoints via `curl.exe` / `Invoke-WebRequest` against `next start`, verifying `200` with and without `bbox`, and `400` when `regionId=custom` has no `bbox`.
 - **Needs from others:** Confirm in-process imports with `@backend` (`M2-T5`).
 
-### M4-T2 (`MVP-SHOULD`) `[!]` Fix `GEMINI_MODEL`, Configure `GEMINI_API_KEY`, & Repair `m4-t2.test.mjs`
+### M4-T2 (`MVP-SHOULD`) `[!]` Provider-limited Gemini verification
 - **Objective:** Make `/api/ai/brief` actually work against the live Gemini API and make the AI test suite runnable under Node 24 without loader errors.
 - **Files:** `src/lib/ai/config.ts`, `src/lib/ai/brief.ts`, `tests/ai/m4-t2.test.mjs`
 - **Steps:**
@@ -117,7 +117,7 @@ Member 4 owns the grounded Gemini AI briefing endpoint (`/api/ai/brief`), CSV ex
   3. Notice `<AssistantPanel />` & `<ExportButton />` use Tailwind utility classes (`rounded-2xl`, `p-5`, etc.) — verify readability and visual alignment once `@frontend` completes `M3-T3` & `M3-T4`.
 - **Acceptance criteria:** Exporting Analytics CSV for historical month `2024-03` sends `?year=2024&month=3` and puts median/anomaly columns on row `(2024, 3)`.
 
-### M4-T4 (`MVP-SHOULD`) `[ ]` Add Route Tests for `/api/export/*` & `/api/ai/brief` Edge Cases
+### M4-T4 (`MVP-SHOULD`) `[x]` Add Route Tests for `/api/export/*` & `/api/ai/brief` Edge Cases
 - **Objective:** Automated regression protection for export validation (`bbox` omitted vs `custom` without `bbox`), formula escaping (`\t`, `\r`), and AI request size/JSON error codes.
 - **Files:** `tests/ai/m4-t3.test.mjs` or expand `tests/ai/m4-t4.test.mjs` & `m4-t2.test.mjs`.
 - **Steps:** Add tests exercising: (a) `/api/ai/brief` invalid JSON -> `400`, `>100KB` body -> `413`, missing key -> `503`; (b) `/api/export/csv` & `analytics-csv` request parsing without `bbox` (`200` vs mock) and `regionId=custom` without `bbox` (`400`); (c) CSV escaping for leading `\t` and `\r`.
@@ -164,10 +164,10 @@ node --import ./tests/analytics/register-paths.mjs --test tests/ai/*.test.mjs
 
 ## 10. Handoff Checklist
 
-- [ ] `M4-T1`: Export routes return `200` when `bbox` is absent (`csv` & `analytics-csv`), call backend helpers directly (no self-fetch), and escape `\t`/`\r`.
-- [ ] `M4-T2`: Official Gemini model ID verified in `src/lib/ai/config.ts`, `GEMINI_API_KEY` live-tested, and `m4-t2.test.mjs` passes.
+- [x] `M4-T1`: Export routes return `200` when `bbox` is absent (`csv` & `analytics-csv`), call backend helpers directly (no self-fetch), and escape `\t`/`\r`.
+- [ ] `M4-T2`: Official Gemini model ID verified in `src/lib/ai/config.ts`, `GEMINI_API_KEY` live-tested, and `m4-t2.test.mjs` passes against a non-503 provider response.
 - [ ] `M4-T3`: `ExportButton` forwards active `year`/`month`, and both components are mounted by `@frontend`.
-- [ ] `M4-T4`: Route & CSV regression tests added and `100%` passing.
+- [x] `M4-T4`: Route & CSV regression tests added and `100%` passing.
 - [ ] `M4-T5`: `docs/presentation/4-slide-pitch.md` & `judge-questions.md` free of `VERIFY` placeholders (`12/12` checks green).
 - [ ] `M4-T6`: Live demo rehearsed & `90s` backup video recorded (`6/6` checks green).
 

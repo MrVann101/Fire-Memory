@@ -1,8 +1,8 @@
 # FIRE MEMORY four-slide pitch
 
-**Status:** draft for the 2026 NASA Space Apps Challenge. Replace every
-`VERIFY` item before submission. Never replace a placeholder with a simulated
-number presented as NASA data.
+**Status:** working draft for the 2026 NASA Space Apps Challenge. The
+production database, deployment, team registration, and final submission
+fields still require final verification.
 
 ## Slide 1 — Challenge and problem (45 seconds)
 
@@ -10,26 +10,26 @@ number presented as NASA data.
 
 **On-slide content:**
 
-- Official challenge: **VERIFY the exact challenge title on the submission
-  page.**
+- Official event: **2026 NASA Space Apps Challenge — The Next Frontier**
+  ([official site](https://www.spaceappschallenge.org/2026/)).
 - MODIS provides a long record; VIIRS provides finer, continuing
   observations.
 - Their counts cannot be compared directly because the sensors differ in
   resolution, sensitivity, and observation schedule.
 - A map shows where detections occurred, but not whether this month is
   unusual for the same place and season.
-- Real project number: **VERIFY — insert one value from the final
-  validation report**, such as the number of available history years,
-  overlap months, or a measured correlation.
+- Source-traceable project number: the supplied 2020–2025 local downloads
+  contain **177,843 source detections** (24,310 MODIS and 153,533 VIIRS).
+  This is a provisional local aggregate, not a claim of complete coverage.
 
 **Speaker notes:**
 
 “Satellite maps are useful, but a count without historical context is hard to
 interpret. A change in detections can reflect a sensor change rather than a
 change in activity. FIRE MEMORY addresses that continuity problem for the
-Philippines by combining the long MODIS record with VIIRS and showing the
-comparison honestly. The number on this slide must come from our final data
-validation, not from a mock.”
+Philippines by combining the MODIS and VIIRS records and showing the
+comparison honestly. The 177,843 figure comes from the supplied local
+aggregate and is explicitly provisional.”
 
 ## Slide 2 — Solution and validity (60 seconds)
 
@@ -50,10 +50,11 @@ validation, not from a mock.”
 **Speaker notes:**
 
 “The harmonized series is not a claim that the instruments are equivalent. It
-is a documented calibration: VIIRS is the target, MODIS-only months are
-estimated, and the application reports the factor and validation error. The
-median compares November with previous Novembers, rather than comparing one
-season with every month.”
+is a documented calibration: VIIRS is the target, and the application reports
+the factor and validation error. The current supplied harmonized output has
+no estimated rows because missing coverage is not treated as zero. The median
+compares November with previous Novembers, rather than comparing one season
+with every month.”
 
 ## Slide 3 — Demonstration (2 minutes 30 seconds)
 
@@ -92,7 +93,10 @@ from hiding uncertainty. The AI only interprets the supplied summary.”
 - Member 2: Supabase, APIs, historical median, anomaly logic
 - Member 3: map, filters, calendar, accessibility
 - Member 4: AI interpretation, exports, presentation
-- NASA FIRMS attribution and project URL: **VERIFY**
+- NASA FIRMS attribution:
+  [NASA LANCE FIRMS](https://earthdata.nasa.gov/firms)
+- Project repository:
+  [MrVann101/Fire-Memory](https://github.com/MrVann101/Fire-Memory)
 
 **What we do not claim:**
 
@@ -110,14 +114,14 @@ coverage and harmonization as the data record changes.”
 
 ## Submission checks
 
-- [ ] Confirm the exact official challenge title.
-- [ ] Insert one real, source-traceable number on Slide 1.
-- [ ] Replace the attribution/project URL placeholder.
+- [x] Confirm the official event title and theme.
+- [x] Insert one real, source-traceable number on Slide 1.
+- [x] Add NASA FIRMS attribution and the project repository URL.
 - [ ] Confirm all team members are registered for the same event/team.
 - [ ] Complete every required project-submission field.
-- [ ] Confirm the official deadline and local timezone.
+- [x] Confirm the official submission window: November 14, 9:00 AM through
+  November 15, 11:59 PM in the team local-event timezone.
 - [ ] Test the deployed demo URL and backup video before submission.
 
-The official 2026 site currently states that project submission opens on
-November 14 at 9:00 AM and closes November 15 at 11:59 PM local time;
-recheck the live submission page immediately before submitting.
+Recheck the [official project submission guide](https://www.spaceappschallenge.org/resources/project-submission-guide/)
+immediately before submitting.

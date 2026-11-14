@@ -46,3 +46,31 @@ test("protects spreadsheet formulas and preserves analytics nulls", () => {
   assert.equal(csv.split("\r\n")[0], ANALYTICS_CSV_COLUMNS.join(","));
   assert.match(csv, /,,true,,,'=not_calculable/);
 });
+
+test("protects tab and carriage-return formula prefixes", () => {
+  const csv = toAnalyticsCsv([
+    {
+      year: 2025,
+      month: 11,
+      metric: "harmonized",
+      count: null,
+      estimated: false,
+      historicalMedian: null,
+      anomalyPercent: null,
+      label: "\t=SUM(A1:A2)",
+    },
+    {
+      year: 2025,
+      month: 12,
+      metric: "harmonized",
+      count: null,
+      estimated: false,
+      historicalMedian: null,
+      anomalyPercent: null,
+      label: "\r+SUM(A1:A2)",
+    },
+  ]);
+
+  assert.match(csv, /'\t=SUM\(A1:A2\)/);
+  assert.match(csv, /'\r\+SUM\(A1:A2\)/);
+});

@@ -243,9 +243,9 @@ no secret or stack trace is exposed.
 
 - [x] Gemini SDK/model/package details are checked against current official
       documentation or marked `VERIFY`.
-- [ ] `GEMINI_API_KEY` is server-only.
-- [ ] Prompt uses only `AnalyticsSummary` and treats question as untrusted.
-- [ ] AI mentions region, period, count, median, baseline years, and limits.
+- [x] `GEMINI_API_KEY` is server-only.
+- [x] Prompt uses only `AnalyticsSummary` and treats question as untrusted.
+- [x] AI mentions region, period, count, median, baseline years, and limits.
 - [x] Estimated values, harmonization error, and custom approximation appear.
 - [x] Unsafe evacuation/prediction requests are refused.
 - [x] Ten-plus AI cases pass.

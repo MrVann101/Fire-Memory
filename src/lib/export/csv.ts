@@ -24,7 +24,7 @@ export const ANALYTICS_CSV_COLUMNS = [
 ] as const;
 
 function protectSpreadsheetFormula(value: string): string {
-  return /^[=+\-@]/.test(value) ? `'${value}` : value;
+  return /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
 }
 
 function escapeCsvValue(value: unknown): string {

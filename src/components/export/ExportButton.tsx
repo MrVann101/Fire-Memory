@@ -10,6 +10,8 @@ import type {
 interface ExportButtonProps {
   filters: HotspotFiltersForExport;
   metric: ExportMetric;
+  year?: number;
+  month?: number;
 }
 
 async function downloadCsv(
@@ -34,6 +36,8 @@ async function downloadCsv(
 function queryString(
   filters: HotspotFiltersForExport,
   metric?: ExportMetric,
+  year?: number,
+  month?: number,
 ): string {
   const params = new URLSearchParams({
     regionId: filters.regionId,
@@ -47,10 +51,23 @@ function queryString(
   if (metric) {
     params.set("metric", metric);
   }
+  if (metric === "harmonized" || metric === "raw") {
+    const selectedYear = year ?? Number(filters.start.slice(0, 4));
+    const selectedMonth = month ?? Number(filters.start.slice(5, 7));
+    if (Number.isInteger(selectedYear) && Number.isInteger(selectedMonth)) {
+      params.set("year", String(selectedYear));
+      params.set("month", String(selectedMonth));
+    }
+  }
   return params.toString();
 }
 
-export function ExportButton({ filters, metric }: ExportButtonProps) {
+export function ExportButton({
+  filters,
+  metric,
+  year,
+  month,
+}: ExportButtonProps) {
   const [activeExport, setActiveExport] = useState<"hotspots" | "analytics" | null>(
     null,
   );
@@ -60,7 +77,12 @@ export function ExportButton({ filters, metric }: ExportButtonProps) {
     setActiveExport(kind);
     setMessage(null);
     try {
-      const query = queryString(filters, kind === "analytics" ? metric : undefined);
+      const query = queryString(
+        filters,
+        kind === "analytics" ? metric : undefined,
+        year,
+        month,
+      );
       const result = await downloadCsv(
         `/api/export/${kind === "hotspots" ? "csv" : "analytics-csv"}?${query}`,
         `fire-memory-${kind}.csv`,

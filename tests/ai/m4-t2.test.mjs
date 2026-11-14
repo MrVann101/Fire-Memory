@@ -120,6 +120,34 @@ test("returns explicit HTTP errors for malformed and oversized requests", async 
   assert.equal(oversized.status, 413);
 });
 
+test("returns 503 when Gemini is not configured", async () => {
+  const previousKey = process.env.GEMINI_API_KEY;
+  delete process.env.GEMINI_API_KEY;
+
+  try {
+    const response = await POST(
+      new Request("http://localhost/api/ai/brief", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          summary,
+          question: "Explain this month's activity.",
+        }),
+      }),
+    );
+    const body = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.equal(body.error, "AI_NOT_CONFIGURED");
+  } finally {
+    if (previousKey === undefined) {
+      delete process.env.GEMINI_API_KEY;
+    } else {
+      process.env.GEMINI_API_KEY = previousKey;
+    }
+  }
+});
+
 test("returns a safe response for an unsafe HTTP question", async () => {
   const response = await POST(
     new Request("http://localhost/api/ai/brief", {

@@ -1,33 +1,14 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 
+import { queryHotspots } from "@/lib/db/hotspots";
+import {
+  AppValidationError,
+  RegionNotFoundError,
+  parseBBoxParam,
+} from "@/lib/db/validation";
 import { toCsv } from "@/lib/export/csv";
-import type {
-  HotspotFiltersForExport,
-  HotspotForExport,
-} from "@/lib/export/types";
-
-const bboxSchema = z
-  .string()
-  .regex(/^-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?,-?\d+(?:\.\d+)?$/)
-  .transform((value) => value.split(",").map(Number) as [number, number, number, number]);
-
-const hotspotResponseSchema = z.object({
-  hotspots: z.array(
-    z.object({
-      id: z.string(),
-      latitude: z.number(),
-      longitude: z.number(),
-      acquisitionDatetime: z.string(),
-      satellite: z.string(),
-      instrument: z.enum(["MODIS", "VIIRS"]),
-      confidence: z.union([z.string(), z.number()]).nullable(),
-      brightness: z.number().nullable(),
-      sourceProduct: z.string().nullable(),
-    }),
-  ),
-  truncated: z.boolean(),
-});
+import type { HotspotFiltersForExport } from "@/lib/export/types";
 
 function buildFilenameSegment(value: string): string {
   return value.replace(/[^a-z0-9_-]+/gi, "-").replace(/^-|-$/g, "") || "selection";
@@ -39,7 +20,7 @@ function parseFilters(request: Request): HotspotFiltersForExport {
   const start = searchParams.get("start");
   const end = searchParams.get("end");
   const instrument = searchParams.get("instrument") ?? "ALL";
-  const bbox = searchParams.get("bbox");
+  const bbox = parseBBoxParam(searchParams.get("bbox"));
 
   const parsed = z
     .object({
@@ -47,7 +28,7 @@ function parseFilters(request: Request): HotspotFiltersForExport {
       start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       end: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       instrument: z.enum(["MODIS", "VIIRS", "ALL"]),
-      bbox: bboxSchema.optional(),
+      bbox: z.tuple([z.number(), z.number(), z.number(), z.number()]).optional(),
     })
     .safeParse({ regionId, start, end, instrument, bbox });
 
@@ -59,20 +40,6 @@ function parseFilters(request: Request): HotspotFiltersForExport {
   }
 
   return parsed.data;
-}
-
-function toBackendQuery(filters: HotspotFiltersForExport): string {
-  const params = new URLSearchParams({
-    regionId: filters.regionId,
-    start: filters.start,
-    end: filters.end,
-    instrument: filters.instrument ?? "ALL",
-    limit: "10000",
-  });
-  if (filters.bbox) {
-    params.set("bbox", filters.bbox.join(","));
-  }
-  return params.toString();
 }
 
 export async function GET(request: Request) {
@@ -90,37 +57,30 @@ export async function GET(request: Request) {
   }
 
   try {
-    const backendResponse = await fetch(
-      new URL(`/api/hotspots?${toBackendQuery(filters)}`, request.url),
-      { cache: "no-store" },
-    );
-    const backendBody: unknown = await backendResponse.json().catch(() => null);
-    if (!backendResponse.ok) {
-      return NextResponse.json(
-        { error: "HOTSPOT_QUERY_FAILED", message: "Hotspot data could not be loaded." },
-        { status: 502 },
-      );
-    }
-
-    const parsedBody = hotspotResponseSchema.safeParse(backendBody);
-    if (!parsedBody.success) {
-      return NextResponse.json(
-        { error: "INVALID_HOTSPOT_RESPONSE", message: "Hotspot data had an invalid shape." },
-        { status: 502 },
-      );
-    }
-
-    const csv = toCsv(parsedBody.data.hotspots as HotspotForExport[]);
+    const response = await queryHotspots(filters, 10_000);
+    const csv = toCsv(response.hotspots);
     const filename = `fire-memory-${buildFilenameSegment(filters.regionId)}-${filters.start}-${filters.end}-${filters.instrument ?? "ALL"}.csv`;
     return new Response(`\uFEFF${csv}`, {
       status: 200,
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="${filename}"`,
-        "X-Fire-Memory-Truncated": String(parsedBody.data.truncated),
+        "X-Fire-Memory-Truncated": String(response.truncated),
       },
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof AppValidationError) {
+      return NextResponse.json(
+        { error: error.code, message: error.message },
+        { status: 400 },
+      );
+    }
+    if (error instanceof RegionNotFoundError) {
+      return NextResponse.json(
+        { error: error.code, message: error.message },
+        { status: 404 },
+      );
+    }
     return NextResponse.json(
       { error: "HOTSPOT_EXPORT_FAILED", message: "The hotspot export failed." },
       { status: 502 },

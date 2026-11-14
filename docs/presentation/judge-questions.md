@@ -72,8 +72,12 @@ disaster-risk and research users before making operational claims.
 
 ## Submission facts to verify
 
-- [ ] Exact official challenge title.
+- [x] Official event: 2026 NASA Space Apps Challenge — The Next Frontier.
 - [ ] Current global judging criteria and project-submission fields.
 - [ ] Team registration and event requirements.
-- [ ] Current submission deadline and local timezone.
+- [x] Submission opens November 14 at 9:00 AM and closes November 15 at
+  11:59 PM in the team local-event timezone.
 - [ ] Whether the demo/video has a current duration or format limit.
+
+Sources: [2026 NASA Space Apps Challenge](https://www.spaceappschallenge.org/2026/)
+and the [official project submission guide](https://www.spaceappschallenge.org/resources/project-submission-guide/).
