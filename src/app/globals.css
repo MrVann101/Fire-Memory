@@ -502,17 +502,14 @@ a {
 }
 
 .map-region-trigger {
-  display: inline-flex;
+  display: grid;
   position: absolute;
   z-index: 810;
   top: 184px;
-  right: 16px;
-  left: auto;
+  left: 16px;
+  width: 44px;
   height: 44px;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 0 12px;
+  place-items: center;
   border: 1px solid var(--border);
   border-radius: 10px;
   background: var(--surface);
@@ -524,13 +521,6 @@ a {
 .map-region-trigger svg {
   width: 22px;
   height: 22px;
-  flex: 0 0 auto;
-}
-
-.map-region-trigger span {
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
 }
 
 .map-region-trigger:hover {
@@ -602,7 +592,7 @@ a {
 .map-assistant-trigger {
   position: absolute;
   z-index: 820;
-  top: 236px;
+  top: 184px;
   right: 16px;
   display: inline-flex;
   height: 44px;
@@ -640,11 +630,11 @@ a {
 .map-assistant-dock {
   position: absolute;
   z-index: 800;
-  top: 294px;
+  top: 242px;
   right: 16px;
   display: none;
   width: min(380px, calc(100% - 32px));
-  max-height: calc(100% - 310px);
+  max-height: calc(100% - 258px);
   overflow: auto;
   border-radius: 16px;
   box-shadow: 0 10px 28px rgb(23 48 48 / 18%);
@@ -1408,18 +1398,12 @@ h1 {
 }
 
 .province-bubble-label {
-  max-width: 120px;
-  overflow: hidden;
-  padding: 3px 5px !important;
   border: 1px solid #597370 !important;
   border-radius: 4px !important;
   background: #fff !important;
   color: #183137 !important;
-  font-size: 9px !important;
+  font-size: 10px !important;
   font-weight: 700;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .leaflet-popup-content h3 {
@@ -1852,11 +1836,11 @@ h1 {
 
   .map-region-trigger {
     top: 184px;
-    right: 12px;
+    left: 12px;
   }
 
   .map-assistant-trigger {
-    top: 236px;
+    top: 184px;
     right: 12px;
   }
 
@@ -1870,10 +1854,10 @@ h1 {
   }
 
   .map-assistant-dock {
-    top: 294px;
+    top: 242px;
     right: 12px;
     width: min(320px, calc(100% - 24px));
-    max-height: calc(100% - 310px);
+    max-height: calc(100% - 258px);
   }
 
   .map-workspace .map-metadata {
@@ -1953,13 +1937,13 @@ h1 {
   }
 
   .map-assistant-trigger {
-    top: 236px;
+    top: 184px;
     right: 10px;
   }
 
   .map-region-trigger {
     top: 184px;
-    right: 10px;
+    left: 10px;
   }
 
   .map-filter-popover {
@@ -1968,10 +1952,10 @@ h1 {
   }
 
   .map-assistant-dock {
-    top: 294px;
+    top: 242px;
     right: 10px;
     width: calc(100% - 20px);
-    max-height: calc(100% - 310px);
+    max-height: calc(100% - 258px);
   }
 
   .map-workspace .map-metadata {
@@ -2259,7 +2243,7 @@ textarea {
 .map-workspace .raw-window strong {
   color: var(--muted);
   font-family: var(--font-jetbrains-mono), monospace;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .map-summary-card {

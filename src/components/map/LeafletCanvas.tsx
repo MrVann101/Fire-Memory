@@ -13,7 +13,6 @@ import { MapContainer, TileLayer, useMap } from "react-leaflet";
 
 type ActivityBand = "low" | "moderate" | "high" | "very-high";
 type BubbleBand = ActivityBand | "no-data";
-const CHILD_BUBBLE_LABEL_MIN_ZOOM = 8;
 
 const BUBBLE_COLORS: Record<BubbleBand, { stroke: string; fill: string }> = {
   low: { stroke: "#047857", fill: "#10b981" },
@@ -89,7 +88,7 @@ function DetectionLayer({ hotspots }: { hotspots: Hotspot[] }) {
         const count = cluster.getChildCount();
         const band = getClusterBand(count);
         const size =
-          count >= 100 ? 36 : count >= 50 ? 32 : count >= 10 ? 28 : 24;
+          count >= 100 ? 54 : count >= 50 ? 48 : count >= 10 ? 42 : 36;
 
         return L.divIcon({
           className: `telemetry-cluster telemetry-cluster--${band}`,
@@ -153,7 +152,6 @@ function ChildBubbleLayer({
 
   useEffect(() => {
     const layer = L.layerGroup();
-    const bubbles: L.CircleMarker[] = [];
     const maxCount = childCounts.reduce(
       (max, child) => Math.max(max, child.count ?? 0),
       0
@@ -171,8 +169,8 @@ function ChildBubbleLayer({
       const longitude = (minLongitude + maxLongitude) / 2;
       const radius =
         child.count === null || maxCount === 0
-          ? 5
-          : 5 + Math.sqrt(child.count / maxCount) * 4;
+          ? 9
+          : 8 + Math.sqrt(child.count / maxCount) * 9;
       const countLabel =
         child.count === null
           ? "No data"
@@ -185,7 +183,7 @@ function ChildBubbleLayer({
       const bubble = L.circleMarker([latitude, longitude], {
         radius,
         color: colors.stroke,
-        weight: 1.5,
+        weight: 2,
         fillColor: colors.fill,
         fillOpacity: 0.78,
         bubblingMouseEvents: false,
@@ -220,10 +218,8 @@ function ChildBubbleLayer({
         });
       });
 
-      bubble.bindTooltip(child.name, {
-        permanent: map.getZoom() >= CHILD_BUBBLE_LABEL_MIN_ZOOM,
-        direction: "right",
-        offset: [8, 0],
+      bubble.bindTooltip(`${child.name}: ${countLabel}`, {
+        direction: "top",
         className: "province-bubble-label",
       });
       bubble.bindPopup(
@@ -234,38 +230,10 @@ function ChildBubbleLayer({
       );
       bubble.on("click", () => onSelectRegion(child.regionId));
       layer.addLayer(bubble);
-      bubbles.push(bubble);
     }
 
     map.addLayer(layer);
-    const syncBubbleLabels = () => {
-      const mapSize = map.getSize();
-      for (const bubble of bubbles) {
-        const tooltip = bubble.getTooltip();
-        if (!tooltip) {
-          continue;
-        }
-        const point = map.latLngToContainerPoint(bubble.getLatLng());
-        const showLabel =
-          map.getZoom() >= CHILD_BUBBLE_LABEL_MIN_ZOOM &&
-          point.x >= 4 &&
-          point.x <= mapSize.x - 176 &&
-          point.y >= 168 &&
-          point.y <= mapSize.y - 20;
-        tooltip.options.permanent = showLabel;
-        if (showLabel) {
-          bubble.openTooltip();
-        } else {
-          bubble.closeTooltip();
-        }
-      }
-    };
-    map.on("zoomend", syncBubbleLabels);
-    map.on("moveend", syncBubbleLabels);
-    syncBubbleLabels();
     return () => {
-      map.off("zoomend", syncBubbleLabels);
-      map.off("moveend", syncBubbleLabels);
       map.removeLayer(layer);
     };
   }, [childCounts, map, onSelectRegion, regions]);
