@@ -334,7 +334,7 @@ missing data into zero.
 - [x] Correlation, error, leave-one-year-out, and anomaly-consistency
       results are in `docs/HARMONIZATION.md`.
 - [x] Three source counts and one cell-day have been independently checked.
-- [ ] `DATA_ATTRIBUTION`, `DATA_LIMITATIONS`, and `HARMONIZATION_NOTE` exist.
+- [x] `DATA_ATTRIBUTION`, `DATA_LIMITATIONS`, and `HARMONIZATION_NOTE` exist.
 
 ## 10. If you are blocked
 
