@@ -3,6 +3,7 @@ import Link from "next/link";
 import { useCallback, useMemo, useState } from "react";
 import type {
   AnalyticsQuery,
+  AnalyticsSummary,
   BBox,
   HarmonizationResponse,
   Instrument,
@@ -29,6 +30,38 @@ import {
   useSummary,
 } from "@/hooks/useDashboardData";
 import type { ClientResource } from "@/hooks/useClientResource";
+
+function formatSummaryNumber(
+  resource: ClientResource<AnalyticsSummary>,
+  value: number | null | undefined
+): string {
+  if (resource.error) {
+    return "Unavailable";
+  }
+  if (resource.isLoading) {
+    return "Loading...";
+  }
+  return value == null ? "No data" : value.toLocaleString("en-US");
+}
+
+function formatAnomalyPercent(
+  resource: ClientResource<AnalyticsSummary>,
+  value: number | null | undefined
+): string {
+  if (resource.error) {
+    return "Unavailable";
+  }
+  if (resource.isLoading) {
+    return "Loading...";
+  }
+  if (value == null) {
+    return "Not available";
+  }
+  return `${value > 0 ? "+" : ""}${value.toLocaleString("en-US", {
+    maximumFractionDigits: 1,
+  })}%`;
+}
+
 type CalendarQuery = Omit<AnalyticsQuery, "year" | "month">;
 type ChildrenQuery = Pick<
   AnalyticsQuery,
@@ -403,6 +436,35 @@ export default function DashboardShell({
     summary.data?.lastUpdated ??
     hotspots.data?.lastUpdated ??
     hotspotWindow.data?.lastUpdated;
+  const summaryMonth = periodRange
+    ? new Intl.DateTimeFormat("en-US", {
+        month: "short",
+        year: "numeric",
+        timeZone: "UTC",
+      }).format(
+        new Date(Date.UTC(periodRange.year, periodRange.month - 1, 1))
+      )
+    : "Selected month";
+  const summaryRegion =
+    summary.data?.region.name ?? selectedRegion?.name ?? "Selected area";
+  const baselineYears = summary.data?.baselineYears ?? [];
+  const baselineDetail = baselineYears.length
+    ? `${baselineYears.length} years (${baselineYears[0]}-${baselineYears[baselineYears.length - 1]})`
+    : "No comparable baseline";
+  const activityMetricDetail =
+    metric === "harmonized"
+      ? "VIIRS-equivalent active cell-days"
+      : `Raw ${instrument === "ALL" ? "all-sensor" : instrument} active cell-days`;
+  const anomalyLabel = summary.data?.label
+    ? summary.data.label.replace("_", " ").replace(/^\w/, (letter) =>
+        letter.toUpperCase()
+      )
+    : summary.error
+      ? "Unavailable"
+      : summary.isLoading
+        ? "Loading baseline"
+        : "No comparison";
+  const anomalyClass = summary.data?.label ?? "not_calculable";
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
@@ -456,21 +518,6 @@ export default function DashboardShell({
         </nav>
       </aside>
       <div className="app-content">
-        <header className="site-header">
-          <div className="site-header-inner">
-            <div className="header-status">
-              {isSimulated && (
-                <span className="simulated-badge">
-                  <span aria-hidden="true">●</span> Simulated data
-                </span>
-              )}
-              <span className="connection-status">
-                <span className="status-dot" aria-hidden="true" />
-                {isSimulated ? "Mock data active" : "API data mode"}
-              </span>
-            </div>
-          </div>
-        </header>
       <main className="dashboard-main dashboard-map-page" id="main-content">
         <section className="map-workspace" aria-label="Satellite fire map">
           <MapView
@@ -486,6 +533,70 @@ export default function DashboardShell({
           <h1 className="sr-only" id="page-title">
             Satellite activity dashboard
           </h1>
+          <section
+            className="map-summary-cards"
+            aria-label="Selected month fire activity summary"
+          >
+            <article className="map-summary-card">
+              <p className="map-summary-card-label">{summaryMonth} Activity</p>
+              <strong className="map-summary-card-value">
+                {formatSummaryNumber(summary, summary.data?.currentCount)}
+              </strong>
+              <span className="map-summary-card-detail">
+                {summaryRegion} · {activityMetricDetail}
+              </span>
+            </article>
+            <article className="map-summary-card">
+              <p className="map-summary-card-label">
+                VIIRS Active-Fire (375m)
+              </p>
+              <strong className="map-summary-card-value">
+                {formatSummaryNumber(
+                  summary,
+                  summary.data?.byInstrument.VIIRS
+                )}
+              </strong>
+              <span className="map-summary-card-detail">
+                Raw active cell-days
+              </span>
+            </article>
+            <article className="map-summary-card">
+              <p className="map-summary-card-label">
+                MODIS Active-Fire (1km)
+              </p>
+              <strong className="map-summary-card-value">
+                {formatSummaryNumber(
+                  summary,
+                  summary.data?.byInstrument.MODIS
+                )}
+              </strong>
+              <span className="map-summary-card-detail">
+                Raw active cell-days
+              </span>
+            </article>
+            <article className="map-summary-card">
+              <p className="map-summary-card-label">
+                {summaryMonth} Historical Median
+              </p>
+              <strong className="map-summary-card-value">
+                {formatSummaryNumber(summary, summary.data?.historicalMedian)}
+              </strong>
+              <span className="map-summary-card-detail">
+                Baseline: {baselineDetail}
+              </span>
+            </article>
+            <article className="map-summary-card map-summary-card-anomaly">
+              <p className="map-summary-card-label">Anomaly vs. Median</p>
+              <strong className="map-summary-card-value">
+                {formatAnomalyPercent(summary, summary.data?.anomalyPercent)}
+              </strong>
+              <span
+                className={`map-summary-status map-summary-status-${anomalyClass}`}
+              >
+                {anomalyLabel}
+              </span>
+            </article>
+          </section>
           <div
             className={`map-filter-popover${isFilterPopoverOpen ? " is-open" : ""}`}
           >
