@@ -1,0 +1,47 @@
+{
+  "_simulated": true,
+  "regions": [
+    {
+      "id": "PH",
+      "name": "Philippines (National)",
+      "level": "country",
+      "parentId": null,
+      "bbox": [116.9, 4.5, 126.6, 21.1]
+    },
+    {
+      "id": "PH-BUK",
+      "name": "Bukidnon",
+      "level": "province",
+      "parentId": "PH",
+      "bbox": [124.48, 7.36, 125.49, 8.63]
+    },
+    {
+      "id": "PH-DAV",
+      "name": "Davao del Sur",
+      "level": "province",
+      "parentId": "PH",
+      "bbox": [125.08, 6.45, 125.72, 7.35]
+    },
+    {
+      "id": "PH-NUE",
+      "name": "Nueva Ecija",
+      "level": "province",
+      "parentId": "PH",
+      "bbox": [120.61, 15.13, 121.38, 16.15]
+    },
+    {
+      "id": "PH-PAL",
+      "name": "Palawan",
+      "level": "province",
+      "parentId": "PH",
+      "bbox": [116.92, 7.82, 120.36, 12.22]
+    },
+    {
+      "id": "PH-BAT",
+      "name": "Batanes",
+      "level": "province",
+      "parentId": "PH",
+      "bbox": [121.81, 20.24, 122.02, 21.11]
+    }
+  ]
+}
