@@ -2,23 +2,63 @@
 
 ## Status (checked 2026-11-14)
 
-No FIRMS archive request has been submitted from this workspace: the archive
-download page requires Earthdata or email-code authentication, and neither
-that session nor a `FIRMS_MAP_KEY` is available here. No source files or
-samples have been downloaded. The country API is currently marked by FIRMS as
-unavailable; do not treat that API as a working Philippines download path.
+The user supplied NASA FIRMS CSV downloads in the workspace on 2026-11-14.
+They are stored locally under `data/raw/` and excluded from Git. The original
+archive request confirmation, exact product selection, retrieval URL, and
+standard-versus-NRT designation were not included, so those details remain
+**VERIFY**. The archive download page requires Earthdata or email-code
+authentication. The country API is currently marked by FIRMS as unavailable;
+do not treat that API as a working Philippines download path.
 
-This is an access blocker, not evidence that Philippines observations are
-missing. Philippine-specific dates, gaps, record counts, and overlap coverage
-remain **VERIFY** until downloaded archive files and availability metadata
-have been inspected. No raw count is reported here.
+The local files have been inspected for CSV headers, row counts, date ranges,
+satellite values, and version values. They contain data for 2020-2025 from
+both MODIS Terra/Aqua and VIIRS NOAA-20 (N20). These files do not establish
+the earliest available Philippine observations, daily/monthly coverage, or
+the complete sensor overlap. In particular, a date absent from a detection
+CSV is not proof of missing sensor coverage. Philippine coverage gaps and
+actual calibration periods remain **VERIFY** until compared with FIRMS
+availability metadata and complete archive coverage.
 
-To unblock: authenticate at the FIRMS Archive Download page, request the
-Philippines area for each standard-processing source listed below, and retain
-the request confirmation and downloaded files under `data/raw/` (raw files
-must not be committed). For ongoing recent-window retrieval, obtain a
-`FIRMS_MAP_KEY` through NASA FIRMS and provide it to scripts only through the
-environment. Never copy a key into a file, terminal output, or Git.
+For ongoing recent-window retrieval, obtain a `FIRMS_MAP_KEY` through NASA
+FIRMS and provide it to scripts only through the environment. Never copy a
+key into a file, terminal output, or Git.
+
+## Local downloads inspected
+
+The original CSVs are retained outside the repository. The following
+workspace copies were checked on 2026-11-14; row counts exclude the header.
+The VIIRS `jpss1` filenames and `N20` field identify NOAA-20. `version`
+values are recorded verbatim and are not used here to infer standard/NRT.
+
+| File group | Files | Rows | Earliest and latest detection dates in files | `satellite` values | `version` values |
+|---|---:|---:|---|---|---|
+| MODIS | 6 (2020-2025) | 24,310 | 2020-01-01 to 2025-12-31 | Aqua, Terra | `6.03`, `61.03` |
+| VIIRS JPSS-1 / NOAA-20 | 6 (2020-2025) | 153,533 | 2020-01-01 to 2025-12-31 | `N20` | `2` |
+| **Total** | **12** | **177,843** | | | |
+
+Per-file rows and observed detection-date ranges:
+
+| File | Rows | First detection | Last detection |
+|---|---:|---|---|
+| `modis_2020_Philippines.csv` | 5,941 | 2020-01-01 | 2020-12-31 |
+| `modis_2021_Philippines.csv` | 3,227 | 2021-01-01 | 2021-12-31 |
+| `modis_2022_Philippines.csv` | 2,569 | 2022-01-01 | 2022-12-30 |
+| `modis_2023_Philippines.csv` | 4,267 | 2023-01-01 | 2023-12-31 |
+| `modis_2024_Philippines.csv` | 6,318 | 2024-01-01 | 2024-12-31 |
+| `modis_2025_Philippines.csv` | 1,988 | 2025-01-02 | 2025-12-31 |
+| `viirs-jpss1_2020_Philippines.csv` | 38,502 | 2020-01-01 | 2020-12-31 |
+| `viirs-jpss1_2021_Philippines.csv` | 20,100 | 2021-01-01 | 2021-12-31 |
+| `viirs-jpss1_2022_Philippines.csv` | 15,291 | 2022-01-01 | 2022-12-31 |
+| `viirs-jpss1_2023_Philippines.csv` | 24,560 | 2023-01-01 | 2023-12-31 |
+| `viirs-jpss1_2024_Philippines.csv` | 41,652 | 2024-01-01 | 2024-12-31 |
+| `viirs-jpss1_2025_Philippines.csv` | 13,428 | 2025-01-01 | 2025-12-31 |
+
+The MODIS CSV header is
+`latitude,longitude,brightness,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_t31,frp,daynight,type`.
+The VIIRS CSV header is
+`latitude,longitude,bright_ti4,scan,track,acq_date,acq_time,satellite,instrument,confidence,version,bright_ti5,frp,daynight,type`.
+The filenames and row fields are evidence about these local files only; they
+do not replace the missing archive manifest or FIRMS coverage metadata.
 
 ## Products and published date coverage
 
@@ -105,9 +145,10 @@ the current FIRMS disclaimer and product guide before publication.
   downloaded product's coverage before treating a month as observed.
 - Global start/end dates above do not establish Philippine coverage or
   guarantee every month has data.
-- The final archive request, actual CSV headers, earliest Philippines
-  detections, data gaps, source counts, and actual overlap years remain
-  **VERIFY** until the archive access blocker is resolved.
+- The archive request metadata and product processing type, earliest
+  Philippine detections, data gaps/coverage, complete-history source counts,
+  and actual overlap years remain **VERIFY** until the downloaded subset is
+  reconciled with FIRMS archive and availability metadata.
 
 ## Official sources
 
