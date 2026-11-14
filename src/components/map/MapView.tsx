@@ -91,10 +91,12 @@ export default function MapView({
 
       <div className="map-metadata">
         <p className="map-attribution">
-          Satellite imagery © NASA EOSDIS GIBS (VIIRS Suomi-NPP); hotspot
-          markers use NASA FIRMS detections. Imagery date:{" "}
-          {imageryDate ?? "waiting for the selected month"}. Detections are
-          thermal observations, not confirmed fire incidents.
+          Base map: OpenStreetMap. NASA EOSDIS GIBS VIIRS Suomi-NPP true-color
+          imagery is requested for{" "}
+          {imageryDate ?? "the selected month"} when available; the base map
+          remains visible if that dated imagery is unavailable. Hotspot markers
+          use NASA FIRMS detections. Detections are thermal observations, not
+          confirmed fire incidents.
         </p>
         <p className="raw-window">
           <strong>Raw window:</strong>{" "}

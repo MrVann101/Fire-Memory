@@ -139,6 +139,20 @@ function DetectionLayer({ hotspots }: { hotspots: Hotspot[] }) {
   return null;
 }
 
+function MapSizeObserver() {
+  const map = useMap();
+
+  useEffect(() => {
+    const observer = new ResizeObserver(() => {
+      map.invalidateSize({ pan: false });
+    });
+    observer.observe(map.getContainer());
+    return () => observer.disconnect();
+  }, [map]);
+
+  return null;
+}
+
 function ChildBubbleLayer({
   childCounts,
   regions,
@@ -378,6 +392,11 @@ export default function LeafletCanvas({
       className="leaflet-map"
       aria-label="Map centered on the Philippines"
     >
+      <TileLayer
+        attribution='© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        url="https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+        maxZoom={18}
+      />
       {imageryDate && (
         <TileLayer
           attribution='<a href="https://earthdata.nasa.gov/eosdis/science-system-description/eosdis-components/global-imagery-browse-services-gibs">NASA EOSDIS GIBS</a> · VIIRS Suomi-NPP'
@@ -386,19 +405,7 @@ export default function LeafletCanvas({
           maxNativeZoom={9}
         />
       )}
-      <TileLayer
-        attribution="NASA EOSDIS GIBS · Reference features"
-        url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Features_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png"
-        maxZoom={18}
-        maxNativeZoom={13}
-        opacity={0.75}
-      />
-      <TileLayer
-        attribution="NASA EOSDIS GIBS · Reference labels"
-        url="https://gibs.earthdata.nasa.gov/wmts/epsg3857/best/Reference_Labels_15m/default/GoogleMapsCompatible_Level13/{z}/{y}/{x}.png"
-        maxZoom={18}
-        maxNativeZoom={13}
-      />
+      <MapSizeObserver />
       <RegionViewport region={selectedRegion} />
       <DetectionLayer hotspots={hotspots} />
       <ChildBubbleLayer

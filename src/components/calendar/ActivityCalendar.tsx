@@ -3,7 +3,7 @@
 import type { CalendarCell, CalendarResponse } from "@/contracts/types";
 import type { ClientResource } from "@/hooks/useClientResource";
 
-const countRamp = ["#440154", "#3b528b", "#21918c", "#5ec962", "#fde725"];
+const countRamp = ["#fff1c7", "#f7bd4a", "#f28124", "#d7471f", "#8f2319"];
 const monthNames = [
   "Jan",
   "Feb",
@@ -27,7 +27,7 @@ function colorForCount(count: number, maxCount: number): {
   const index = Math.min(countRamp.length - 1, Math.floor(ratio * countRamp.length));
   return {
     backgroundColor: countRamp[index],
-    color: index <= 1 ? "#ffffff" : "#183137",
+    color: index < 3 ? "#422317" : "#fff8ed",
   };
 }
 
@@ -165,7 +165,7 @@ export default function ActivityCalendar({
                               ? {
                                   ...colorForCount(cell.count, maxCount),
                                   backgroundImage: cell.estimated
-                                    ? "repeating-linear-gradient(45deg, transparent 0, transparent 4px, rgb(255 255 255 / 55%) 4px, rgb(255 255 255 / 55%) 6px)"
+                                    ? "repeating-linear-gradient(45deg, transparent 0, transparent 4px, rgb(255 248 237 / 68%) 4px, rgb(255 248 237 / 68%) 6px)"
                                     : undefined,
                                 }
                               : undefined
