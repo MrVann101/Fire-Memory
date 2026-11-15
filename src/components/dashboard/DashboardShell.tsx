@@ -688,26 +688,93 @@ export default function DashboardShell({
             );
           })}
         </nav>
-        <div
-          className="sidebar-lang-panel"
-          role="group"
-          aria-label={t.languageSelector.ariaLabel}
-        >
-          <p className="sidebar-lang-heading">{t.languageSelector.heading}</p>
-          <div className="sidebar-lang-buttons">
-            {LANGUAGE_OPTIONS.map((option) => (
-              <button
-                key={option.code}
-                type="button"
-                className={`sidebar-lang-btn${language === option.code ? " is-active" : ""}`}
-                aria-pressed={language === option.code}
-                title={option.nativeName}
-                onClick={() => setLanguage(option.code)}
-              >
-                <span className="sidebar-lang-short">{option.shortLabel}</span>
-                <span className="sidebar-lang-long">{option.expandedLabel}</span>
-              </button>
-            ))}
+        <div className="sidebar-lang-panel">
+          <button
+            type="button"
+            className="sidebar-lang-rail-btn"
+            aria-label={t.languageSelector.ariaLabel}
+            title={
+              LANGUAGE_OPTIONS.find((option) => option.code === language)
+                ?.nativeName ?? language.toUpperCase()
+            }
+            onClick={() => setIsSidebarOpen((open) => !open)}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="17"
+              height="17"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="9.5" />
+              <path d="M2.5 12h19" />
+              <path d="M12 2.5a14.5 14.5 0 0 1 0 19 14.5 14.5 0 0 1 0-19Z" />
+            </svg>
+            <span className="sidebar-lang-badge">
+              {
+                (
+                  LANGUAGE_OPTIONS.find((option) => option.code === language) ??
+                  LANGUAGE_OPTIONS[0]
+                ).shortLabel
+              }
+            </span>
+          </button>
+          <div className="sidebar-lang-drawer">
+            <div className="sidebar-lang-header">
+              <span className="sidebar-lang-title-wrap">
+                <svg
+                  viewBox="0 0 24 24"
+                  width="13"
+                  height="13"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="9.5" />
+                  <path d="M2.5 12h19" />
+                  <path d="M12 2.5a14.5 14.5 0 0 1 0 19 14.5 14.5 0 0 1 0-19Z" />
+                </svg>
+                <span className="sidebar-lang-heading">
+                  {t.languageSelector.heading}
+                </span>
+              </span>
+              <span className="sidebar-lang-active">
+                {
+                  (
+                    LANGUAGE_OPTIONS.find(
+                      (option) => option.code === language
+                    ) ?? LANGUAGE_OPTIONS[0]
+                  ).expandedLabel
+                }
+              </span>
+            </div>
+            <div
+              className="sidebar-lang-buttons"
+              role="group"
+              aria-label={t.languageSelector.ariaLabel}
+            >
+              {LANGUAGE_OPTIONS.map((option) => (
+                <button
+                  key={option.code}
+                  type="button"
+                  className={`sidebar-lang-btn${
+                    language === option.code ? " is-active" : ""
+                  }`}
+                  aria-pressed={language === option.code}
+                  title={option.nativeName}
+                  onClick={() => setLanguage(option.code)}
+                >
+                  {option.expandedLabel}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </aside>

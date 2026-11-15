@@ -948,6 +948,8 @@ test("translations dictionary and whole-app multilingual switchers cover en, ceb
   assert.match(providerSource, /fire-memory-language/);
   assert.match(providerSource, /document\.documentElement\.lang = language/);
   assert.match(shellSource, /sidebar-lang-panel/);
+  assert.match(shellSource, /sidebar-lang-rail-btn/);
+  assert.match(shellSource, /sidebar-lang-drawer/);
   assert.match(shellSource, /id="calendar-language"/);
   assert.match(shellSource, /id="feature-language"/);
   assert.match(assistantSource, /assistant-lang-switcher/);
@@ -958,5 +960,8 @@ test("translations dictionary and whole-app multilingual switchers cover en, ceb
   assert.match(analyticsSource, /getTranslations\(language\)/);
   assert.match(exportSource, /getTranslations\(language\)/);
   assert.match(cssSource, /\.sidebar-lang-panel/);
+  assert.match(cssSource, /\.sidebar-lang-drawer/);
   assert.match(cssSource, /\.assistant-lang-switcher/);
+  assert.match(cssSource, /--font-geist-sans/);
+  assert.match(cssSource, /--font-geist-mono/);
 });
