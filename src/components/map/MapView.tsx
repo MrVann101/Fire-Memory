@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import { useDashboardFilters } from "@/components/dashboard/DashboardFiltersProvider";
 import type {
   BBox,
   ChildCount,
@@ -8,14 +9,21 @@ import type {
   Region,
 } from "@/contracts/types";
 import type { ClientResource } from "@/hooks/useClientResource";
+import { getTranslations } from "@/lib/i18n/translations";
+
+function MapLoadingFallback() {
+  const { language } = useDashboardFilters();
+  const t = getTranslations(language);
+  return (
+    <div className="map-loading" role="status">
+      {t.map.loadingMap}
+    </div>
+  );
+}
 
 const LeafletCanvas = dynamic(() => import("./LeafletCanvas"), {
   ssr: false,
-  loading: () => (
-    <div className="map-loading" role="status">
-      Loading map…
-    </div>
-  ),
+  loading: () => <MapLoadingFallback />,
 });
 
 export default function MapView({
@@ -39,6 +47,8 @@ export default function MapView({
   drawRectangle: boolean;
   onDrawComplete: (bbox: BBox) => void;
 }) {
+  const { language } = useDashboardFilters();
+  const t = getTranslations(language);
   const response = resource.data;
   const rawWindow = response?.rawWindow;
   const isNationalView = region?.level === "country";
@@ -57,14 +67,36 @@ export default function MapView({
           ? "fires_viirs_72,fires_modis_72"
           : "fires_viirs_7,fires_modis_7";
 
+  const intensitySteps = [
+    { key: "low" as const, label: "Low", color: "var(--hotspot-low, #fb923c)" },
+    {
+      key: "moderate" as const,
+      label: "Moderate",
+      color: "var(--hotspot-moderate, #f97316)",
+    },
+    { key: "high" as const, label: "High", color: "var(--hotspot-high, #ea580c)" },
+    {
+      key: "very-high" as const,
+      label: "Very High",
+      color: "var(--hotspot-very-high, #ef4444)",
+    },
+  ];
+
+  const activeCountLabel =
+    language === "ceb"
+      ? `${response?.returned.toLocaleString("en-US") ?? 0} aktibo`
+      : language === "fil"
+        ? `${response?.returned.toLocaleString("en-US") ?? 0} aktibo`
+        : `${response?.returned.toLocaleString("en-US") ?? 0} active`;
+
   return (
     <section className="map-panel" aria-labelledby="map-title">
       <div className="section-heading map-heading sr-only">
         <div>
           <p className="eyebrow">GEOGRAPHIC VIEW</p>
-          <h2 id="map-title">Satellite detection map</h2>
+          <h2 id="map-title">{t.nav.map}</h2>
         </div>
-        <span className="map-range">{region?.name ?? "Select an area"}</span>
+        <span className="map-range">{region?.name ?? t.shell.summaryCard.region}</span>
       </div>
 
       <div className="map-viewport">
@@ -79,20 +111,21 @@ export default function MapView({
           onSelectRegion={onSelectRegion}
           drawRectangle={drawRectangle}
           onRectangleComplete={onDrawComplete}
+          language={language}
         />
         {drawRectangle && (
           <div className="map-draw-banner" role="status" aria-live="polite">
-            Drag across the map to draw a custom area rectangle.
+            {t.map.drawAreaBanner}
           </div>
         )}
         {resource.isLoading && (
           <div className="map-state-banner" role="status" aria-live="polite">
-            Loading satellite detections…
+            {t.map.loadingHotspots}
           </div>
         )}
         {resource.error && (
           <div className="map-state-banner map-state-error" role="alert">
-            Hotspot data could not be loaded: {resource.error.message}
+            {t.map.hotspotErrorTitle}: {resource.error.message}
           </div>
         )}
         {response && response.total === 0 && (
@@ -101,14 +134,13 @@ export default function MapView({
               i
             </span>
             <span>
-              No satellite thermal hotspots were recorded in this area for the
-              selected date window.
+              {t.map.noDetectionsTitle}. {t.map.noDetectionsBody}
             </span>
           </div>
         )}
       </div>
 
-      <div className="map-metadata" aria-label="Hotspot intensity scale">
+      <div className="map-metadata" aria-label={t.map.intensityTitle}>
         <div
           className="map-legend-header"
           style={{
@@ -129,7 +161,7 @@ export default function MapView({
               fontFamily: "var(--font-jetbrains-mono), monospace",
             }}
           >
-            Hotspot Intensity Scale
+            {language === "en" ? "Hotspot Intensity Scale" : t.map.intensityTitle}
           </span>
           {response && (
             <span
@@ -142,7 +174,7 @@ export default function MapView({
                 fontVariantNumeric: "tabular-nums",
               }}
             >
-              {response.returned.toLocaleString("en-US")} active
+              {activeCountLabel}
             </span>
           )}
         </div>
@@ -150,21 +182,16 @@ export default function MapView({
         <div
           className="map-intensity-scale"
           role="list"
-          aria-label="Hotspot intensity levels"
+          aria-label={t.map.intensityTitle}
           style={{
             display: "grid",
             gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
             gap: "6px",
           }}
         >
-          {[
-            { label: "Low", color: "var(--hotspot-low, #fb923c)" },
-            { label: "Moderate", color: "var(--hotspot-moderate, #f97316)" },
-            { label: "High", color: "var(--hotspot-high, #ea580c)" },
-            { label: "Very High", color: "var(--hotspot-very-high, #ef4444)" },
-          ].map((step) => (
+          {intensitySteps.map((step) => (
             <div
-              key={step.label}
+              key={step.key}
               className="map-intensity-step"
               role="listitem"
               style={{ display: "grid", gap: "4px" }}
@@ -189,7 +216,7 @@ export default function MapView({
                   lineHeight: 1.2,
                 }}
               >
-                {step.label}
+                {t.map.intensityBands[step.key] ?? step.label}
               </span>
             </div>
           ))}
@@ -207,7 +234,9 @@ export default function MapView({
           }}
         >
           VIIRS 375m · MODIS 1km
-          {rawWindow ? ` · ${rawWindow.start} to ${rawWindow.end}` : ""}
+          {rawWindow
+            ? ` · ${rawWindow.start} ${t.shell.summaryCard.dateRangeTo} ${rawWindow.end}`
+            : ""}
         </p>
       </div>
     </section>

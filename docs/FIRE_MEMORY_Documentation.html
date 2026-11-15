@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>FIRE MEMORY — Official Project Documentation &amp; CDRRMO User Guide</title>
+  <style>
+    :root {
+      --ink: #0f172a;
+      --muted: #475569;
+      --border: #cbd5e1;
+      --surface: #ffffff;
+      --tint: #f8fafc;
+      --accent: #ea580c;
+      --accent-soft: #fff7ed;
+      --accent-border: #fdba74;
+      --info: #0369a1;
+      --info-soft: #f0f9ff;
+      --danger: #991b1b;
+      --danger-soft: #fef2f2;
+    }
+
+    @page {
+      size: A4;
+      margin: 15mm 14mm 16mm 14mm;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: var(--ink);
+      background: #e2e8f0;
+      line-height: 1.5;
+      font-size: 13.5px;
+    }
+
+    .page-container {
+      max-width: 920px;
+      margin: 24px auto;
+      background: var(--surface);
+      padding: 36px 42px;
+      border: 1px solid var(--border);
+      box-shadow: 0 12px 32px rgb(15 23 42 / 8%);
+    }
+
+    @media print {
+      body {
+        background: #ffffff;
+        font-size: 10.5pt;
+      }
+      .page-container {
+        max-width: none;
+        margin: 0;
+        padding: 0;
+        border: none;
+        box-shadow: none;
+      }
+      .no-print {
+        display: none !important;
+      }
+      .page-break {
+        break-before: page;
+        page-break-before: always;
+      }
+      .keep-together {
+        break-inside: avoid;
+        page-break-inside: avoid;
+      }
+    }
+
+    .print-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding: 10px 14px;
+      background: var(--tint);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .print-toolbar span {
+      font-size: 12.5px;
+      color: var(--muted);
+    }
+
+    .print-btn {
+      padding: 7px 14px;
+      background: var(--accent);
+      color: #ffffff;
+      border: none;
+      border-radius: 5px;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .cover-header {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding-bottom: 20px;
+      border-bottom: 2px solid var(--ink);
+      margin-bottom: 18px;
+    }
+
+    .cover-logo {
+      width: 68px;
+      height: 68px;
+      flex: 0 0 68px;
+      border-radius: 14px;
+      overflow: hidden;
+    }
+
+    .eyebrow {
+      margin: 0 0 4px 0;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--accent);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.15;
+      letter-spacing: -0.02em;
+    }
+
+    .subtitle {
+      margin: 6px 0 0 0;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 16px 0 20px 0;
+    }
+
+    .meta-card {
+      padding: 10px 12px;
+      background: var(--tint);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .meta-label {
+      display: block;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+    }
+
+    .meta-value {
+      display: block;
+      margin-top: 3px;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .callout {
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin: 14px 0;
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+    }
+
+    .callout--danger {
+      border-left-color: var(--danger);
+      background: var(--danger-soft);
+    }
+
+    .callout--info {
+      border-left-color: var(--info);
+      background: var(--info-soft);
+    }
+
+    .callout-title {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12.5px;
+      font-weight: 700;
+    }
+
+    h2 {
+      margin: 24px 0 10px 0;
+      padding-bottom: 5px;
+      border-bottom: 1px solid var(--border);
+      font-size: 17px;
+      color: var(--ink);
+      letter-spacing: -0.01em;
+    }
+
+    h3 {
+      margin: 16px 0 6px 0;
+      font-size: 14px;
+      color: var(--ink);
+    }
+
+    p {
+      margin: 0 0 10px 0;
+    }
+
+    ul, ol {
+      margin: 6px 0 12px 0;
+      padding-left: 20px;
+    }
+
+    li {
+      margin-bottom: 5px;
+    }
+
+    code {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.9em;
+      background: #f1f5f9;
+      padding: 1px 5px;
+      border-radius: 4px;
+      border: 1px solid #e2e8f0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 16px 0;
+      font-size: 12.5px;
+    }
+
+    th, td {
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--tint);
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .two-col {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin: 10px 0 14px 0;
+    }
+
+    .panel {
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface);
+    }
+
+    .panel-title {
+      margin: 0 0 6px 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .diagram-box {
+      padding: 12px 14px;
+      background: var(--tint);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11.5px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      margin: 10px 0 16px 0;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 700;
+      border: 1px solid var(--border);
+      background: var(--tint);
+    }
+
+    .footer-note {
+      margin-top: 26px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      font-size: 11.5px;
+      color: var(--muted);
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="page-container">
+    <div class="print-toolbar no-print">
+      <span><strong>Submission Copy:</strong> Use <em>Print / Save as PDF</em> for a clean A4 submission PDF.</span>
+      <button type="button" class="print-btn" onclick="window.print()">Print / Save as PDF</button>
+    </div>
+
+    <!-- COVER HEADER -->
+    <header class="cover-header keep-together">
+      <div class="cover-logo" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="100%" height="100%">
+          <defs>
+            <linearGradient id="docFireGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#FF3B30"/>
+              <stop offset="45%" stop-color="#FF6B00"/>
+              <stop offset="80%" stop-color="#FFA800"/>
+              <stop offset="100%" stop-color="#FFD600"/>
+            </linearGradient>
+            <linearGradient id="docFlameCoreGrad" x1="0%" y1="100%" x2="0%" y2="0%">
+              <stop offset="0%" stop-color="#FF1E56"/>
+              <stop offset="60%" stop-color="#FF8A00"/>
+              <stop offset="100%" stop-color="#FFF275"/>
+            </linearGradient>
+            <linearGradient id="docCircuitGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#FFA800"/>
+              <stop offset="50%" stop-color="#FF3366"/>
+              <stop offset="100%" stop-color="#7928CA"/>
+            </linearGradient>
+            <linearGradient id="docBgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#14141E"/>
+              <stop offset="100%" stop-color="#08080C"/>
+            </linearGradient>
+          </defs>
+          <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#docBgGrad)"/>
+          <g transform="translate(33, 28)">
+            <g stroke="url(#docCircuitGrad)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" opacity="0.85">
+              <path d="M 60 152 L 60 125 L 75 110 L 75 80" fill="none"/>
+              <path d="M 130 160 L 130 132 L 115 118 L 115 70" fill="none"/>
+              <path d="M 95 172 L 95 140" fill="none"/>
+              <path d="M 45 112 L 60 125" fill="none"/>
+              <path d="M 145 122 L 130 132" fill="none"/>
+              <circle cx="75" cy="80" r="3.5" fill="#FFA800"/>
+              <circle cx="115" cy="70" r="3.5" fill="#FF3366"/>
+              <circle cx="45" cy="112" r="3" fill="#FFA800"/>
+              <circle cx="145" cy="122" r="3" fill="#7928CA"/>
+              <circle cx="60" cy="152" r="3" fill="#FF4500"/>
+              <circle cx="130" cy="160" r="3" fill="#7928CA"/>
+            </g>
+            <path d="M 95 190 C 42 180 20 138 28 96 C 32 75 45 54 58 40 C 56 57 65 69 75 74 C 71 53 79 27 102 8 C 104 25 115 39 111 58 C 121 46 134 38 142 21 C 155 44 168 80 158 120 C 150 158 126 187 95 190 Z" fill="url(#docFireGrad)"/>
+            <path d="M 95 180 C 63 172 50 143 56 114 C 60 95 73 85 81 87 C 78 97 83 106 92 107 C 90 85 100 68 111 51 C 115 66 123 76 121 91 C 129 93 135 107 133 125 C 129 156 112 177 95 180 Z" fill="url(#docFlameCoreGrad)"/>
+            <g transform="translate(95, 138)">
+              <rect x="-15" y="-15" width="30" height="30" rx="7" fill="#12121C" stroke="#FFD600" stroke-width="2.2"/>
+              <circle cx="0" cy="0" r="5" fill="#FFF275"/>
+            </g>
+          </g>
+        </svg>
+      </div>
+      <div>
+        <p class="eyebrow">2026 NASA Space Apps Challenge — Official Project Documentation</p>
+        <h1>FIRE MEMORY</h1>
+        <p class="subtitle">Historical Satellite Thermal-Activity Analytics, MODIS-to-VIIRS Harmonization, and CDRRMO Decision Support for the Philippines</p>
+      </div>
+    </header>
+
+    <div class="meta-grid keep-together">
+      <div class="meta-card">
+        <span class="meta-label">Challenge Theme</span>
+        <span class="meta-value">The Next Frontier (2026)</span>
+      </div>
+      <div class="meta-card">
+        <span class="meta-label">Geographic Scope</span>
+        <span class="meta-value">Philippines (National &amp; ADM2)</span>
+      </div>
+      <div class="meta-card">
+        <span class="meta-label">Local Source Dataset</span>
+        <span class="meta-value">177,843 Detections (2020–2025)</span>
+      </div>
+      <div class="meta-card">
+        <span class="meta-label">Source Repository</span>
+        <span class="meta-value">MrVann101/Fire-Memory</span>
+      </div>
+    </div>
+
+    <div class="callout callout--danger keep-together">
+      <span class="callout-title">Scientific Honesty &amp; Operational Boundary</span>
+      All points and counts represent NASA LANCE FIRMS satellite thermal anomaly detections—<strong>not confirmed ground fires</strong>, complete incident records, or fire-spread forecasts. Missing satellite or provincial coverage is labeled <code>No data</code> and never silently replaced with zero. Urgent life-safety and operational decisions belong solely to official CDRRMO, BFP, and LGU incident command channels.
+    </div>
+
+    <!-- 1. EXECUTIVE SUMMARY & PROBLEM -->
+    <h2>1. Executive Summary &amp; Problem Statement</h2>
+    <p>
+      Local disaster-risk offices (CDRRMO/MDRRMO), environmental researchers, and planners in the Philippines frequently consult near-real-time satellite hotspot maps, but raw maps alone cannot tell them whether current activity is genuinely unusual for a given province and season. FIRE MEMORY closes three critical analytical gaps:
+    </p>
+    <ul>
+      <li><strong>Cross-Sensor Discontinuity:</strong> Legacy <strong>MODIS (1 km)</strong> and newer <strong>VIIRS (375 m)</strong> instruments differ in spatial resolution, detection sensitivity, and pass schedules. Comparing raw counts directly mistakes a sensor transition for a real change in thermal activity.</li>
+      <li><strong>Missing Seasonal Context:</strong> Comparing November against an all-year average confuses dry-season peaks with rainy-season baselines. FIRE MEMORY compares each selected UTC month strictly against the <strong>same calendar month's historical median</strong>.</li>
+      <li><strong>Hidden Uncertainty &amp; Zero-Bias:</strong> Incomplete data is often rendered as zero, hiding coverage gaps. FIRE MEMORY distinguishes <code>No data</code> from <code>0</code>, separates observed VIIRS rows from estimated MODIS conversions, and reports calibration error transparently.</li>
+    </ul>
+
+    <!-- 2. METHODOLOGY & CALIBRATION -->
+    <section class="keep-together">
+      <h2>2. Data Provenance &amp; MODIS-to-VIIRS Harmonization</h2>
+      <p>
+        The current audited workspace ingestion processes <strong>12 local NASA FIRMS downloads</strong> covering <code>2020-01-01</code> through <code>2025-12-31</code> across Philippines geoBoundaries <code>ADM0</code> and <code>ADM2</code> shapes:
+      </p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Instrument / Product</th>
+            <th>Source Files</th>
+            <th>Source Rows (2020–2025)</th>
+            <th>Unit &amp; Aggregation Rule</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>MODIS</strong> (Aqua &amp; Terra, v6.03 / 61.03)</td>
+            <td>6 yearly CSVs</td>
+            <td><code>24,310</code></td>
+            <td>Normalized by UTC date and grouped into unique <code>0.01°</code> active grid cell-days per month.</td>
+          </tr>
+          <tr>
+            <td><strong>VIIRS NOAA-20</strong> (N20, v2)</td>
+            <td>6 yearly CSVs</td>
+            <td><code>153,533</code></td>
+            <td>Primary calibration target scale (<code>VIIRS-equivalent</code>) using <code>0.01°</code> UTC cell-days.</td>
+          </tr>
+          <tr>
+            <td><strong>Total Audited Local Archive</strong></td>
+            <td><strong>12 files</strong></td>
+            <td><strong>177,843</strong></td>
+            <td>Custom drawn bounding boxes aggregate against coarser <code>0.1°</code> grid cells (<code>grid-approximated</code>).</td>
+          </tr>
+        </tbody>
+      </table>
+    </section>
+
+    <div class="two-col keep-together">
+      <div class="panel">
+        <p class="panel-title">Calibration Method (<code>median-monthly-viirs-over-modis-v1</code>)</p>
+        <ul>
+          <li>Uses only province/month pairs where <strong>both</strong> MODIS and VIIRS recorded positive detections (<code>2,539</code> pairs across <code>72</code> national months in candidate overlap years 2020–2025).</li>
+          <li>Province factor = median of monthly <code>VIIRS / MODIS</code> active-cell-day ratios (minimum <code>12</code> matched months spanning <code>≥ 3</code> years); <code>65</code> provinces use local factors and <code>16</code> use the national fallback.</li>
+          <li>Provisional national factor: <strong><code>4.09777677</code></strong>.</li>
+        </ul>
+      </div>
+      <div class="panel">
+        <p class="panel-title">Measured Validation &amp; Limitations</p>
+        <ul>
+          <li>In-sample national correlation: <code>0.9928</code> (MAPE <code>28.68%</code>).</li>
+          <li>Leave-one-year-out (LOYO) pooled correlation: <strong><code>0.9922</code></strong> (MAPE <code>29.20%</code>, monthly anomaly agreement <code>91.67%</code> across 72 months).</li>
+          <li><strong>Provisional Caution:</strong> Provincial MAPE varies (median <code>88.93%</code>); missing archive retrieval manifests mean figures remain labeled provisional rather than asserting instrument equivalence.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- 3. SYSTEM ARCHITECTURE -->
+    <h2>3. System Architecture &amp; Technical Stack</h2>
+    <div class="diagram-box keep-together">NASA FIRMS Archive (MODIS + VIIRS CSVs) + geoBoundaries PHL ADM0/ADM2
+        │
+        ▼  scripts/ingest/ (normalize → load-regions → aggregate → harmonize → load-supabase)
+Supabase PostgreSQL (regions, hotspots, monthly_counts, monthly_harmonized, monthly_grid_counts, harmonization_factors + RPCs)
+        │
+        ├──▶  Next.js 16 App Router API Layer (Zod validation, NASA FIRMS NRT &amp; transparent PNG WMS proxy, CSV exporters)
+        │
+        └──▶  Interactive Dashboard UI (React 19 + Leaflet + Recharts + CDRRMO Advisory AI via Google Gemini)</div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Layer</th>
+          <th>Implemented Technologies &amp; Safeguards</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Frontend &amp; Map</strong></td>
+          <td>Next.js <code>16.4.6</code> (App Router), React <code>19.3.0</code>, TypeScript <code>5</code>, Leaflet <code>1.9.4</code> + <code>leaflet.markercluster</code> with cloud-free CARTO Voyager underlay, Esri World Imagery (<code>maxNativeZoom=13</code> scaled to <code>z=18</code>), and transparent PNG error shield.</td>
+        </tr>
+        <tr>
+          <td><strong>Backend &amp; Storage</strong></td>
+          <td>Supabase PostgreSQL with Row Level Security (public read), <code>12</code> validated App Router API endpoints (including hardened FIRMS NRT chunking and black-tile PNG <code>IHDR</code> filtering on <code>/api/firms/wms</code>).</td>
+        </tr>
+        <tr>
+          <td><strong>AI Grounding Layer</strong></td>
+          <td>Google Gemini (<code>gemini-2.5-flash</code> / <code>2.0-flash</code>) server-side endpoint (<code>POST /api/ai/brief</code>) enforcing strict JSON numeric verification, prompt-injection isolation, unsafe-prediction refusal, and deterministic CDRRMO fallback.</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <!-- 4. CDRRMO & USER GUIDE -->
+    <h2>4. User Guide for CDRRMO Officers &amp; Analysts</h2>
+
+    <h3>4.1 Map Workspace (<code>/</code>)</h3>
+    <ol>
+      <li><strong>Inspect Top Summary Cards:</strong> View live/monthly totals across five frosted cards: <em>Total Fire Hotspots</em>, <em>Small-Area Sensor (VIIRS 375m)</em>, <em>Wide-Area Sensor (MODIS 1km)</em>, <em>Typical Baseline (Median)</em>, and <em>Comparison vs. Typical Month</em>.</li>
+      <li><strong>Open Map Filters (Pin Button, top-right):</strong> Choose a province/region, set UTC month (<code>YYYY-MM</code>), toggle live windows (<code>Today</code>, <code>7 days</code>, <code>Month</code>, <code>Year</code>), switch between <code>Harmonized</code> and <code>Raw</code> sensor metrics, or draw a custom bounding-box rectangle directly on the map.</li>
+      <li><strong>Examine Clusters &amp; Intensity Legend:</strong> Click cluster markers or province bubbles to zoom in; refer to the bottom-left <strong>Hotspot Intensity Scale</strong> (<code>Low</code>, <code>Moderate</code>, <code>High</code>, <code>Very High</code>).</li>
+    </ol>
+
+    <h3>4.2 CDRRMO Advisory AI &amp; Priority Watchlist (<code>Advisory AI</code> Button)</h3>
+    <ol>
+      <li>Click <strong>Advisory AI</strong> on the right side of the map to open the <em>CDRRMO Fire Advisory</em> drawer.</li>
+      <li>Review the live <code>VIIRS</code> and <code>MODIS</code> breakdown strip, then click <strong>Get CDRRMO Advisory</strong> to generate grounded <em>Summary</em>, <em>CDRRMO Action</em>, and <em>Note</em> cards tailored to BFP &amp; Barangay DRRMC verification.</li>
+      <li>Expand <strong>Ask a specific question (optional)</strong> to choose a prompt or type your own data question; the AI rejects invented numbers, spread forecasts, and evacuation directives.</li>
+      <li>Switch to the <strong>Watchlist</strong> tab to jump directly to high-activity provinces nationally or inspect Bukidnon's Northern, Central (Malaybalay–Valencia), and Southern (Maramag–Quezon) monitoring corridors.</li>
+    </ol>
+
+    <h3>4.3 Historical Calendar (<code>/calendar</code>) &amp; Anomaly Detection (<code>/anomaly</code>)</h3>
+    <ul>
+      <li><strong>Activity Calendar:</strong> Displays every year-by-month detection count side by side; distinct patterns flag <code>Estimated</code> conversions and muted <code>No data</code> gaps without zero-filling. Clicking any cell selects that period globally. Supports Dark and Warm display modes.</li>
+      <li><strong>Anomaly Detection:</strong> Renders a same-month year-by-year bar chart with the dashed <em>Typical Median Line</em>, visual baseline meter, CDRRMO operational posture badge (<code>ROUTINE MONITORING</code> through <code>PRIORITY GROUND VERIFICATION</code>), the <em>MODIS Raw / Scaled / VIIRS Overlap Chart</em>, and the <em>Harmonization Panel</em>.</li>
+    </ul>
+
+    <h3>4.4 CSV Export (<code>/export</code>)</h3>
+    <ul>
+      <li><strong>Hotspot Coordinates CSV:</strong> Exports up to <code>10,000</code> coordinate rows (<code>id</code>, <code>latitude</code>, <code>longitude</code>, <code>acquisitionDatetime</code>, <code>satellite</code>, <code>instrument</code>, <code>confidence</code>, <code>brightness</code>, <code>sourceProduct</code>).</li>
+      <li><strong>Monthly Baseline &amp; Anomaly CSV:</strong> Exports multi-year monthly counts paired with baseline median, anomaly percentage, and classification label for offline LGU briefings.</li>
+    </ul>
+
+    <!-- 5. VERIFICATION & NEXT STEPS -->
+    <h2>5. Automated Verification &amp; Submission Readiness</h2>
+    <div class="callout callout--info keep-together">
+      <span class="callout-title">Verified Engineering Checks</span>
+      Across the test suites covering analytics math, request validation, Next.js API routes, map zoom/tile black-box protection, AI numeric grounding, and CDRRMO UI behavior, <strong>72 tests</strong> run and pass alongside zero TypeScript (<code>npx tsc --noEmit</code>) and ESLint (<code>npm run lint</code>) errors.
+    </div>
+
+    <ul>
+      <li><strong>Confirmed Next Steps:</strong> Acquire complete pre-2020 Philippine MODIS archives and official NASA FIRMS availability metadata to replace provisional coverage labels, validate calibration parameters with local CDRRMO/BFP partners, and confirm live deployment URLs for judge walkthroughs.</li>
+      <li><strong>Attribution:</strong> Satellite active-fire products courtesy of NASA LANCE FIRMS; boundaries from geoBoundaries (PHL ADM0/ADM2); base map tiles via OpenStreetMap / CARTO and Esri.</li>
+    </ul>
+
+    <footer class="footer-note">
+      <span>FIRE MEMORY · 2026 NASA Space Apps Challenge Documentation</span>
+      <span>Repository: https://github.com/MrVann101/Fire-Memory</span>
+    </footer>
+  </div>
+</body>
+</html>

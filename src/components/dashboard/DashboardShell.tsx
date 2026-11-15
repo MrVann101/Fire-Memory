@@ -32,15 +32,27 @@ import {
 } from "@/hooks/useDashboardData";
 import type { ClientResource } from "@/hooks/useClientResource";
 import { countLiveCellDays } from "@/lib/analytics/liveCounts";
+import {
+  LANGUAGE_OPTIONS,
+  getMonthName,
+  getTranslations,
+  type AppLanguage,
+  type DashboardTranslations,
+} from "@/lib/i18n/translations";
 
 type LiveRange = "today" | "7days" | "month" | "year";
 
-const LIVE_RANGE_OPTIONS: Array<{ value: LiveRange; label: string }> = [
-  { value: "today", label: "Today" },
-  { value: "7days", label: "7 days" },
-  { value: "month", label: "Month" },
-  { value: "year", label: "Year" },
-];
+const LIVE_RANGE_VALUES: readonly LiveRange[] = ["today", "7days", "month", "year"];
+
+const LIVE_RANGE_LABELS: Record<
+  LiveRange,
+  Record<AppLanguage, string>
+> = {
+  today: { en: "Today", ceb: "Karon", fil: "Ngayon" },
+  "7days": { en: "7 days", ceb: "7 ka adlaw", fil: "7 araw" },
+  month: { en: "Month", ceb: "Buwan", fil: "Buwan" },
+  year: { en: "Year", ceb: "Tuig", fil: "Taon" },
+};
 
 function getLiveDateRange(range: LiveRange): { start: string; end: string } {
   const now = new Date();
@@ -63,29 +75,49 @@ function getLiveDateRange(range: LiveRange): { start: string; end: string } {
 
 function formatSummaryNumber(
   resource: ClientResource<AnalyticsSummary>,
-  value: number | null | undefined
+  value: number | null | undefined,
+  language: AppLanguage = "en"
 ): string {
   if (resource.error) {
-    return "Unavailable";
+    return language === "ceb"
+      ? "Dili magamit"
+      : language === "fil"
+        ? "Hindi magagamit"
+        : "Unavailable";
   }
   if (resource.isLoading) {
-    return "Loading...";
+    return language === "ceb"
+      ? "Nagkarga…"
+      : language === "fil"
+        ? "Nilo-load…"
+        : "Loading...";
   }
-  return value == null ? "No data" : value.toLocaleString("en-US");
+  const t = getTranslations(language);
+  return value == null ? t.calendar.noData : value.toLocaleString("en-US");
 }
 
 function formatAnomalyPercent(
   resource: ClientResource<AnalyticsSummary>,
-  value: number | null | undefined
+  value: number | null | undefined,
+  language: AppLanguage = "en"
 ): string {
   if (resource.error) {
-    return "Unavailable";
+    return language === "ceb"
+      ? "Dili magamit"
+      : language === "fil"
+        ? "Hindi magagamit"
+        : "Unavailable";
   }
   if (resource.isLoading) {
-    return "Loading...";
+    return language === "ceb"
+      ? "Nagkarga…"
+      : language === "fil"
+        ? "Nilo-load…"
+        : "Loading...";
   }
+  const t = getTranslations(language);
   if (value == null) {
-    return "Not available";
+    return t.shell.summaryCard.notAvailable;
   }
   return `${value > 0 ? "+" : ""}${value.toLocaleString("en-US", {
     maximumFractionDigits: 1,
@@ -107,7 +139,6 @@ type DashboardNavItem = {
   href: string;
   feature: DashboardFeature;
   icon: "map" | "calendar" | "analytics" | "assistant" | "export";
-  label: string;
 };
 type DashboardFeature = "map" | "calendar" | "anomaly" | "assistant" | "export";
 const dashboardNavItems: DashboardNavItem[] = [
@@ -115,27 +146,40 @@ const dashboardNavItems: DashboardNavItem[] = [
     href: "/",
     feature: "map",
     icon: "map",
-    label: "MAP",
   },
   {
     href: "/calendar",
     feature: "calendar",
     icon: "calendar",
-    label: "Calendar",
   },
   {
     href: "/anomaly",
     feature: "anomaly",
     icon: "analytics",
-    label: "Anomaly Detection",
   },
   {
     href: "/export",
     feature: "export",
     icon: "export",
-    label: "CSV Export",
   },
 ];
+function getNavLabel(
+  feature: DashboardFeature,
+  t: DashboardTranslations
+): string {
+  switch (feature) {
+    case "map":
+      return t.nav.map;
+    case "calendar":
+      return t.nav.calendar;
+    case "anomaly":
+      return t.nav.anomaly;
+    case "export":
+      return t.nav.export;
+    default:
+      return t.nav.map;
+  }
+}
 function DashboardIcon({
   name,
 }: {
@@ -203,21 +247,35 @@ function parsePeriod(value: string) {
     end: `${year}-${monthText}-${String(finalDay).padStart(2, "0")}`,
   };
 }
-function formatLastUpdated(value: string | null | undefined): string {
+function formatLastUpdated(
+  value: string | null | undefined,
+  language: AppLanguage = "en"
+): string {
+  const t = getTranslations(language);
   if (!value) {
-    return "Not available";
+    return t.shell.summaryCard.notAvailable;
   }
   const timestamp = Date.parse(value);
   if (Number.isNaN(timestamp)) {
-    return "Unavailable";
+    return language === "ceb"
+      ? "Dili magamit"
+      : language === "fil"
+        ? "Hindi magagamit"
+        : "Unavailable";
   }
-  return `${new Intl.DateTimeFormat("en-PH", {
+  const locale = language === "fil" ? "fil-PH" : "en-PH";
+  return `${new Intl.DateTimeFormat(locale, {
     dateStyle: "medium",
     timeStyle: "short",
     timeZone: "UTC",
   }).format(timestamp)} UTC`;
 }
-function validateBBox(bbox: BBox, countryBBox: BBox | undefined): string | null {
+function validateBBox(
+  bbox: BBox,
+  countryBBox: BBox | undefined,
+  language: AppLanguage = "en"
+): string | null {
+  const t = getTranslations(language);
   const [west, south, east, north] = bbox;
   if (
     !bbox.every(Number.isFinite) ||
@@ -228,10 +286,10 @@ function validateBBox(bbox: BBox, countryBBox: BBox | undefined): string | null 
     west >= east ||
     south >= north
   ) {
-    return "Enter valid coordinates with west < east and south < north.";
+    return t.shell.customArea.invalidCoords;
   }
   if (!countryBBox) {
-    return "Philippines bounds are unavailable; the area cannot be validated.";
+    return t.shell.customArea.boundsUnavailable;
   }
   if (
     west < countryBBox[0] ||
@@ -239,7 +297,7 @@ function validateBBox(bbox: BBox, countryBBox: BBox | undefined): string | null 
     east > countryBBox[2] ||
     north > countryBBox[3]
   ) {
-    return "The custom area must fit within the Philippines overview bounds.";
+    return t.shell.customArea.boundsOutsidePh;
   }
   return null;
 }
@@ -287,6 +345,8 @@ export default function DashboardShell({
     window.dispatchEvent(new Event("calendar-theme-change"));
   }, [calendarTheme]);
   const {
+    language,
+    setLanguage,
     regionId,
     setRegionId,
     metric,
@@ -298,6 +358,7 @@ export default function DashboardShell({
     customBbox,
     setCustomBbox,
   } = useDashboardFilters();
+  const t = getTranslations(language);
   const [bboxDraft, setBboxDraft] = useState<BBoxDraft>({
     west: "124.90",
     south: "7.80",
@@ -355,7 +416,7 @@ export default function DashboardShell({
         east: String(bbox[2]),
         north: String(bbox[3]),
       });
-      const error = validateBBox(bbox, countryBBox);
+      const error = validateBBox(bbox, countryBBox, language);
       if (error) {
         setCustomAreaError(error);
         setIsDrawingArea(false);
@@ -366,7 +427,7 @@ export default function DashboardShell({
       setCustomAreaError(null);
       setIsDrawingArea(false);
     },
-    [countryBBox, setCustomBbox, setRegionId]
+    [countryBBox, language, setCustomBbox, setRegionId]
   );
   const applyCustomArea = useCallback(() => {
     if (
@@ -375,7 +436,7 @@ export default function DashboardShell({
       !bboxDraft.east.trim() ||
       !bboxDraft.north.trim()
     ) {
-      setCustomAreaError("Enter all four longitude and latitude values.");
+      setCustomAreaError(t.shell.customArea.enterAllCoords);
       return;
     }
     const bbox: BBox = [
@@ -385,7 +446,7 @@ export default function DashboardShell({
       Number(bboxDraft.north),
     ];
     activateCustomArea(bbox);
-  }, [activateCustomArea, bboxDraft]);
+  }, [activateCustomArea, bboxDraft, t.shell.customArea.enterAllCoords]);
   const analyticsQuery = useMemo<AnalyticsQuery | null>(() => {
     if (!selectedRegion || !periodRange) {
       return null;
@@ -539,89 +600,116 @@ export default function DashboardShell({
     hotspots.data?.lastUpdated ??
     hotspotWindow.data?.lastUpdated;
   const summaryMonth = periodRange
-    ? new Intl.DateTimeFormat("en-US", {
-        month: "short",
-        year: "numeric",
-        timeZone: "UTC",
-      }).format(
-        new Date(Date.UTC(periodRange.year, periodRange.month - 1, 1))
-      )
-    : "Selected month";
+    ? `${getMonthName(periodRange.month, language, true)} ${periodRange.year}`
+    : t.shell.mapShell.selectedMonthFallback;
   const summaryRegion =
-    summary.data?.region.name ?? selectedRegion?.name ?? "Selected area";
+    summary.data?.region.name ??
+    selectedRegion?.name ??
+    t.shell.mapShell.selectedAreaFallback;
   const baselineYears = summary.data?.baselineYears ?? [];
   const baselineDetail = baselineYears.length
-    ? `${baselineYears.length} years (${baselineYears[0]}-${baselineYears[baselineYears.length - 1]})`
-    : "No comparable baseline";
+    ? t.shell.mapCards.formatBaselineYears(
+        baselineYears.length,
+        baselineYears[0],
+        baselineYears[baselineYears.length - 1]
+      )
+    : t.shell.mapCards.noComparableBaseline;
   const liveCardValue = (value: number | undefined): string => {
     if (value !== undefined) {
       return value.toLocaleString("en-US");
     }
     if (liveHotspots.isLoading) {
-      return "Loading...";
+      return t.shell.mapCards.liveLoading;
     }
-    return liveHotspots.error ? "Unavailable" : "No data";
+    return liveHotspots.error
+      ? t.shell.summaryCard.notAvailable
+      : t.shell.mapCards.liveNoData;
   };
   const anomalyLabel = isCurrentPeriod
-    ? "Live Window in Progress"
+    ? t.shell.mapCards.anomalyStatus.live
     : summary.data?.label === "unusually_high"
-      ? "Unusually High — Verify Area"
+      ? t.shell.mapCards.anomalyStatus.unusually_high
       : summary.data?.label === "above_baseline"
-        ? "Above Normal — Monitor Closely"
+        ? t.shell.mapCards.anomalyStatus.above_baseline
         : summary.data?.label === "near_baseline"
-          ? "Normal for This Month"
+          ? t.shell.mapCards.anomalyStatus.near_baseline
           : summary.data?.label === "below_baseline"
-            ? "Below Normal Activity"
+            ? t.shell.mapCards.anomalyStatus.below_baseline
             : summary.isLoading
-              ? "Loading baseline"
-              : "Baseline Unavailable";
+              ? t.shell.mapCards.anomalyStatus.loading
+              : t.shell.mapCards.anomalyStatus.unavailable;
   const anomalyClass = summary.data?.label ?? "not_calculable";
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
-        Skip to dashboard
+        {t.shell.skipToContent}
       </a>
       <aside
         className={`dashboard-sidebar${isSidebarOpen ? " sidebar-open" : ""}`}
-        aria-label="Dashboard sidebar"
+        aria-label={t.shell.mapShell.sidebarAria}
       >
-        <Link className="sidebar-brand" href="/" aria-label="FIRE MEMORY home">
+        <Link className="sidebar-brand" href="/" aria-label={t.shell.mapShell.homeAria}>
           <span className="sidebar-brand-mark" aria-hidden="true">
             <FireMemoryLogo />
           </span>
           <span className="sidebar-brand-copy">
             <span className="sidebar-brand-name">FIRE MEMORY</span>
-            <span className="sidebar-brand-caption">Historical intelligence</span>
+            <span className="sidebar-brand-caption">{t.nav.brandCaption}</span>
           </span>
         </Link>
         <button
           type="button"
           className="sidebar-toggle"
-          aria-label={isSidebarOpen ? "Collapse sidebar" : "Expand sidebar"}
+          aria-label={isSidebarOpen ? t.nav.closeNavigation : t.nav.openNavigation}
           aria-expanded={isSidebarOpen}
           aria-controls="dashboard-nav"
           onClick={() => setIsSidebarOpen((open) => !open)}
         >
           <span aria-hidden="true">{isSidebarOpen ? "‹" : "›"}</span>
         </button>
-        <p className="sidebar-heading">Main features</p>
-        <nav className="sidebar-nav" id="dashboard-nav" aria-label="Dashboard sections">
-          {dashboardNavItems.map((item) => (
-            <Link
-              className={`sidebar-nav-link${resolvedFeature === item.feature ? " is-active" : ""}`}
-              href={item.href}
-              key={item.href}
-              title={item.label}
-              aria-current={resolvedFeature === item.feature ? "page" : undefined}
-              onClick={() => setIsSidebarOpen(false)}
-            >
-              <span className="sidebar-icon">
-                <DashboardIcon name={item.icon} />
-              </span>
-              <span className="sidebar-label">{item.label}</span>
-            </Link>
-          ))}
+        <p className="sidebar-heading">{t.nav.menuLabel}</p>
+        <nav className="sidebar-nav" id="dashboard-nav" aria-label={t.shell.mapShell.navSectionsAria}>
+          {dashboardNavItems.map((item) => {
+            const label = getNavLabel(item.feature, t);
+            return (
+              <Link
+                className={`sidebar-nav-link${resolvedFeature === item.feature ? " is-active" : ""}`}
+                href={item.href}
+                key={item.href}
+                title={label}
+                aria-current={resolvedFeature === item.feature ? "page" : undefined}
+                onClick={() => setIsSidebarOpen(false)}
+              >
+                <span className="sidebar-icon">
+                  <DashboardIcon name={item.icon} />
+                </span>
+                <span className="sidebar-label">{label}</span>
+              </Link>
+            );
+          })}
         </nav>
+        <div
+          className="sidebar-lang-panel"
+          role="group"
+          aria-label={t.languageSelector.ariaLabel}
+        >
+          <p className="sidebar-lang-heading">{t.languageSelector.heading}</p>
+          <div className="sidebar-lang-buttons">
+            {LANGUAGE_OPTIONS.map((option) => (
+              <button
+                key={option.code}
+                type="button"
+                className={`sidebar-lang-btn${language === option.code ? " is-active" : ""}`}
+                aria-pressed={language === option.code}
+                title={option.nativeName}
+                onClick={() => setLanguage(option.code)}
+              >
+                <span className="sidebar-lang-short">{option.shortLabel}</span>
+                <span className="sidebar-lang-long">{option.expandedLabel}</span>
+              </button>
+            ))}
+          </div>
+        </div>
       </aside>
       <div className="app-content">
       <main
@@ -629,7 +717,7 @@ export default function DashboardShell({
         id="main-content"
       >
         {resolvedFeature === "map" && (
-        <section className="map-workspace" aria-label="Satellite fire map">
+        <section className="map-workspace" aria-label={t.shell.mapShell.mapWorkspaceAria}>
           <MapView
             resource={hotspots}
             region={selectedRegion ?? null}
@@ -647,90 +735,92 @@ export default function DashboardShell({
             onDrawComplete={activateCustomArea}
           />
           <h1 className="sr-only" id="page-title">
-            Satellite activity dashboard
+            {t.shell.mapShell.mapPageHeadingSr}
           </h1>
           <section
             className="map-summary-cards"
-            aria-label="Selected month fire activity summary"
+            aria-label={t.shell.mapShell.mapSummaryAria}
           >
             <article className="map-summary-card">
               <p className="map-summary-card-label">
-                Total Fire Hotspots ({summaryMonth})
+                {t.shell.mapCards.formatTotalHotspots(summaryMonth)}
               </p>
               <strong className="map-summary-card-value">
                 {isCurrentPeriod
                   ? liveCardValue(liveCounts?.harmonized)
-                  : formatSummaryNumber(summary, summary.data?.currentCount)}
+                  : formatSummaryNumber(summary, summary.data?.currentCount, language)}
               </strong>
               <span className="map-summary-card-detail">
-                {summaryRegion} · Combined satellite heat detections
+                {summaryRegion} · {t.shell.mapCards.combinedHeatDetections}
               </span>
               <span className="map-summary-card-disclaimer">
-                Satellite heat detections • Verify on ground with BFP
+                {t.shell.mapCards.verifyWithBfp}
               </span>
             </article>
             <article className="map-summary-card">
               <p className="map-summary-card-label">
-                Small-Area Sensor (VIIRS 375m)
+                {t.shell.mapCards.smallAreaSensor}
               </p>
               <strong className="map-summary-card-value">
                 {isCurrentPeriod
                   ? liveCardValue(liveCounts?.viirs)
                   : formatSummaryNumber(
                       summary,
-                      summary.data?.byInstrument.VIIRS
+                      summary.data?.byInstrument.VIIRS,
+                      language
                     )}
               </strong>
               <span className="map-summary-card-detail">
-                High-detail sensor • Detects smaller brush &amp; field fires
+                {t.shell.mapCards.smallAreaDetail}
               </span>
               <span className="map-summary-card-disclaimer">
-                Each count = 1 active grid area per day
+                {t.shell.mapCards.cellDayUnitNote}
               </span>
             </article>
             <article className="map-summary-card">
               <p className="map-summary-card-label">
-                Wide-Area Sensor (MODIS 1km)
+                {t.shell.mapCards.wideAreaSensor}
               </p>
               <strong className="map-summary-card-value">
                 {isCurrentPeriod
                   ? liveCardValue(liveCounts?.modis)
                   : formatSummaryNumber(
                       summary,
-                      summary.data?.byInstrument.MODIS
+                      summary.data?.byInstrument.MODIS,
+                      language
                     )}
               </strong>
               <span className="map-summary-card-detail">
-                Long-term sensor • 20+ year historical archive
+                {t.shell.mapCards.wideAreaDetail}
               </span>
               <span className="map-summary-card-disclaimer">
-                Each count = 1 active grid area per day
+                {t.shell.mapCards.cellDayUnitNote}
               </span>
             </article>
             <article className="map-summary-card">
               <p className="map-summary-card-label">
-                Typical {summaryMonth} Baseline (Median)
+                {t.shell.mapCards.formatTypicalBaseline(summaryMonth)}
               </p>
               <strong className="map-summary-card-value">
-                {formatSummaryNumber(summary, summary.data?.historicalMedian)}
+                {formatSummaryNumber(summary, summary.data?.historicalMedian, language)}
               </strong>
               <span className="map-summary-card-detail">
-                Normal level for {summaryMonth} ({baselineDetail})
+                {t.shell.mapCards.formatNormalLevel(summaryMonth, baselineDetail)}
               </span>
               <span className="map-summary-card-disclaimer">
-                Middle value of past years for this same month
+                {t.shell.mapCards.medianFootnote}
               </span>
             </article>
             <article
               className={`map-summary-card map-summary-card-anomaly map-summary-card-anomaly-${anomalyClass}`}
             >
               <p className="map-summary-card-label">
-                Comparison vs. Typical Month
+                {t.shell.mapCards.comparisonLabel}
               </p>
               <strong className="map-summary-card-value">
                 {isCurrentPeriod
-                  ? "Live Period"
-                  : formatAnomalyPercent(summary, summary.data?.anomalyPercent)}
+                  ? t.shell.mapCards.livePeriodValue
+                  : formatAnomalyPercent(summary, summary.data?.anomalyPercent, language)}
               </strong>
               <span
                 className={`map-summary-status map-summary-status-${anomalyClass}`}
@@ -738,7 +828,7 @@ export default function DashboardShell({
                 {anomalyLabel}
               </span>
               <span className="map-summary-card-disclaimer">
-                CDRRMO Decision Support • Non-Predictive
+                {t.shell.mapCards.cdrrmoNonPredictive}
               </span>
             </article>
           </section>
@@ -753,14 +843,36 @@ export default function DashboardShell({
               inert={!isFilterPopoverOpen}
             >
               <div className="map-filter-heading">
-                <h2 id="filter-title">Map filters</h2>
-                <span className="filter-updated">
-                  Updated {formatLastUpdated(latestUpdate)}
-                </span>
+                <div className="map-filter-heading-main">
+                  <h2 id="filter-title">{t.shell.mapFilterPopover.title}</h2>
+                  <span className="filter-updated">
+                    {t.shell.mapShell.updatedPrefix} {formatLastUpdated(latestUpdate, language)}
+                  </span>
+                </div>
+                <div
+                  className="assistant-lang-switcher"
+                  role="group"
+                  aria-label={t.languageSelector.ariaLabel}
+                >
+                  {LANGUAGE_OPTIONS.map((option) => (
+                    <button
+                      key={option.code}
+                      type="button"
+                      className={`assistant-lang-btn${
+                        language === option.code ? " is-active" : ""
+                      }`}
+                      aria-pressed={language === option.code}
+                      title={option.nativeName}
+                      onClick={() => setLanguage(option.code)}
+                    >
+                      {option.shortLabel}
+                    </button>
+                  ))}
+                </div>
               </div>
           <div className="filter-grid">
             <div className="filter-field">
-              <label htmlFor="region">Region</label>
+              <label htmlFor="region">{t.shell.regionLabel}</label>
               <select
                 id="region"
                 value={regionId}
@@ -768,9 +880,9 @@ export default function DashboardShell({
                 onChange={(event) => setRegionId(event.target.value)}
                 aria-describedby="region-help"
               >
-                {regions.isLoading && <option value="">Loading regions…</option>}
+                {regions.isLoading && <option value="">{t.shell.loadingRegions}</option>}
                 {regions.error && (
-                  <option value="">Region catalog unavailable</option>
+                  <option value="">{t.shell.regionsUnavailable}</option>
                 )}
                 {regions.data?.map((region) => (
                   <option key={region.id} value={region.id}>
@@ -778,42 +890,42 @@ export default function DashboardShell({
                   </option>
                 ))}
                 {customRegion && (
-                  <option value="custom">Custom area · grid-approximated</option>
+                  <option value="custom">{t.shell.customAreaGridApprox}</option>
                 )}
               </select>
               <span className="field-help" id="region-help">
                 {regions.isLoading
-                  ? "Loading available regions."
+                  ? t.shell.mapShell.regionHelpLoading
                   : regions.error
                     ? regions.error.message
-                    : "Choose a national, province, or custom area view."}
+                    : t.shell.mapShell.regionHelpDefault}
               </span>
             </div>
             <div className="filter-field">
-              <label htmlFor="period">Month</label>
+              <label htmlFor="period">{t.shell.monthLabel}</label>
               <input
                 id="period"
                 type="month"
                 value={period}
                 onChange={(event) => setPeriodSelection(event.target.value)}
               />
-              <span className="field-help">Select a calendar month in UTC.</span>
+              <span className="field-help">{t.shell.mapShell.monthHelp}</span>
             </div>
             <fieldset className="filter-field metric-field">
-              <legend>Live FIRMS period</legend>
+              <legend>{t.shell.mapShell.liveFirmsPeriodLegend}</legend>
               <div className="segmented-control">
-                {LIVE_RANGE_OPTIONS.map((option) => (
+                {LIVE_RANGE_VALUES.map((rangeValue) => (
                   <label
-                    className={liveRange === option.value ? "selected" : ""}
-                    key={option.value}
+                    className={liveRange === rangeValue ? "selected" : ""}
+                    key={rangeValue}
                   >
                     <input
                       type="radio"
                       name="live-range"
-                      value={option.value}
-                      checked={liveRange === option.value}
+                      value={rangeValue}
+                      checked={liveRange === rangeValue}
                       onChange={() => {
-                        setLiveRange(option.value);
+                        setLiveRange(rangeValue);
                         const now = new Date();
                         setPeriodSelection(
                           `${now.getUTCFullYear()}-${String(
@@ -822,16 +934,16 @@ export default function DashboardShell({
                         );
                       }}
                     />
-                    {option.label}
+                    {LIVE_RANGE_LABELS[rangeValue][language]}
                   </label>
                 ))}
               </div>
               <span className="field-help">
-                Select a current-data window for the map.
+                {t.shell.mapShell.liveFirmsHelp}
               </span>
             </fieldset>
             <fieldset className="filter-field metric-field">
-              <legend>Metric</legend>
+              <legend>{t.shell.metricLabel}</legend>
               <div className="segmented-control">
                 <label className={metric === "harmonized" ? "selected" : ""}>
                   <input
@@ -844,7 +956,7 @@ export default function DashboardShell({
                       setInstrument("ALL");
                     }}
                   />
-                  Harmonized
+                  {t.shell.mapShell.harmonizedShort}
                 </label>
                 <label className={metric === "raw" ? "selected" : ""}>
                   <input
@@ -857,15 +969,15 @@ export default function DashboardShell({
                       setInstrument("ALL");
                     }}
                   />
-                  Raw
+                  {t.shell.mapShell.rawShort}
                 </label>
               </div>
               <span className="field-help">
-                Harmonized is the default view.
+                {t.shell.mapShell.harmonizedHelp}
               </span>
             </fieldset>
             <div className="filter-field">
-              <label htmlFor="instrument">Sensor</label>
+              <label htmlFor="instrument">{t.shell.sensorLabel}</label>
               <select
                 id="instrument"
                 value={instrument}
@@ -878,29 +990,30 @@ export default function DashboardShell({
                 }}
                 aria-describedby="instrument-help"
               >
-                <option value="ALL">All instruments</option>
+                <option value="ALL">{t.shell.allInstrumentsOption}</option>
                 <option value="MODIS">MODIS</option>
                 <option value="VIIRS">VIIRS</option>
               </select>
               <span className="field-help" id="instrument-help">
                 {metric === "raw"
-                  ? "ALL includes MODIS and VIIRS."
-                  : "Available when viewing raw detections."}
+                  ? t.shell.mapShell.sensorHelpRaw
+                  : t.shell.mapShell.sensorHelpDisabled}
               </span>
             </div>
           </div>
           <details className="custom-area-tool">
             <summary>
-              Custom area · grid-approximated
-              {customRegion ? " · active" : " · optional"}
+              {t.shell.customAreaGridApprox}
+              {customRegion
+                ? t.shell.customArea.activeSuffix
+                : t.shell.customArea.optionalSuffix}
             </summary>
             <p className="custom-area-description">
-              Enter longitude and latitude bounds or draw a rectangle on the
-              map. The area must fit within the Philippines overview bounds.
+              {t.shell.customArea.description}
             </p>
             <div className="custom-area-grid">
               <div className="filter-field">
-                <label htmlFor="area-west">West longitude</label>
+                <label htmlFor="area-west">{t.shell.customArea.westLon}</label>
                 <input
                   id="area-west"
                   type="number"
@@ -918,7 +1031,7 @@ export default function DashboardShell({
                 />
               </div>
               <div className="filter-field">
-                <label htmlFor="area-south">South latitude</label>
+                <label htmlFor="area-south">{t.shell.customArea.southLat}</label>
                 <input
                   id="area-south"
                   type="number"
@@ -936,7 +1049,7 @@ export default function DashboardShell({
                 />
               </div>
               <div className="filter-field">
-                <label htmlFor="area-east">East longitude</label>
+                <label htmlFor="area-east">{t.shell.customArea.eastLon}</label>
                 <input
                   id="area-east"
                   type="number"
@@ -954,7 +1067,7 @@ export default function DashboardShell({
                 />
               </div>
               <div className="filter-field">
-                <label htmlFor="area-north">North latitude</label>
+                <label htmlFor="area-north">{t.shell.customArea.northLat}</label>
                 <input
                   id="area-north"
                   type="number"
@@ -979,7 +1092,7 @@ export default function DashboardShell({
                 disabled={!countryBBox}
                 onClick={applyCustomArea}
               >
-                Use custom area
+                {t.shell.customArea.useCustomArea}
               </button>
               <button
                 type="button"
@@ -990,7 +1103,9 @@ export default function DashboardShell({
                   setCustomAreaError(null);
                 }}
               >
-                {isDrawingArea ? "Cancel map drawing" : "Draw rectangle on map"}
+                {isDrawingArea
+                  ? t.shell.customArea.cancelDrawing
+                  : t.shell.customArea.drawRectangle}
               </button>
             </div>
             {customAreaError && (
@@ -1000,9 +1115,10 @@ export default function DashboardShell({
             )}
             {customRegion && (
               <p className="custom-area-active">
-                Active area: {customRegion.name} · bounds{" "}
-                {customBbox?.map((coordinate) => String(coordinate)).join(", ")}{" "}
-                · grid-approximated
+                {t.shell.customArea.formatActiveArea(
+                  customRegion.name,
+                  customBbox?.map((coordinate) => String(coordinate)).join(", ") ?? ""
+                )}
               </p>
             )}
           </details>
@@ -1011,10 +1127,10 @@ export default function DashboardShell({
           <button
             type="button"
             className="map-region-trigger"
-            aria-label="Choose region"
+            aria-label={t.shell.mapShell.chooseRegion}
             aria-controls="map-filter-panel"
             aria-expanded={isFilterPopoverOpen}
-            title="Choose region"
+            title={t.shell.mapShell.chooseRegion}
             onClick={() => {
               setIsFilterPopoverPinned((isPinned) => !isPinned);
             }}
@@ -1035,10 +1151,10 @@ export default function DashboardShell({
           <button
             type="button"
             className={`map-assistant-trigger${isAssistantOpen ? " is-open" : ""}`}
-            aria-label="Open Advisory AI"
+            aria-label={t.shell.mapShell.openAdvisoryAi}
             aria-expanded={isAssistantOpen}
             aria-controls="map-assistant-dock"
-            title="Advisory AI"
+            title={t.shell.summaryCard.advisoryAi}
             onClick={() => setIsAssistantOpen((open) => !open)}
           >
             <svg
@@ -1053,7 +1169,11 @@ export default function DashboardShell({
               <path d="M12 22c4.4 0 7.5-3.1 7.5-7.4 0-3.5-2-6.5-4.7-8.9-.2 2.3-1.1 3.8-2.8 5.2-.3-3.5-2.2-6.7-5.3-8.8.5 4.1-2.2 6.4-2.2 11.3C4.5 18.2 7.6 22 12 22Z" />
               <path d="M12 20c-1.6 0-2.8-1.2-2.8-2.9 0-1.5 1-2.4 2.5-3.8.5 1.4 1.3 2.1 2.1 2.8.9 1.6.1 3.9-1.8 3.9Z" />
             </svg>
-            <span>Advisory AI</span>
+            {language === "en" ? (
+              <span>Advisory AI</span>
+            ) : (
+              <span>{t.shell.summaryCard.advisoryAi}</span>
+            )}
           </button>
           <div
             id="map-assistant-dock"
@@ -1085,9 +1205,9 @@ export default function DashboardShell({
             {resolvedFeature === "calendar" ? (
               <header className="calendar-command-bar">
                 <div className="calendar-command-title">
-                  <h1 className="feature-page-title">Activity Calendar</h1>
+                  <h1 className="feature-page-title">{t.calendar.title}</h1>
                   <span className="calendar-command-scope">
-                    {selectedRegion?.name ?? "Select region"} ·{" "}
+                    {selectedRegion?.name ?? t.shell.mapShell.selectRegionShort} ·{" "}
                     {metric.toUpperCase()} · UTC
                   </span>
                   <div className="calendar-mobile-actions">
@@ -1099,8 +1219,10 @@ export default function DashboardShell({
                         setIsCalendarFiltersOpen((open) => !open)
                       }
                     >
-                      {selectedRegion?.name ?? "Filter"} ·{" "}
-                      {metric === "harmonized" ? "Harm" : "Raw"}{" "}
+                      {selectedRegion?.name ?? t.shell.mapShell.filterChipFallback} ·{" "}
+                      {metric === "harmonized"
+                        ? t.shell.mapShell.harmonizedChipShort
+                        : t.shell.mapShell.rawChipShort}{" "}
                       {isCalendarFiltersOpen ? "▴" : "▾"}
                     </button>
                     <button
@@ -1109,10 +1231,12 @@ export default function DashboardShell({
                       aria-pressed={calendarTheme === "light"}
                       onClick={toggleCalendarTheme}
                     >
-                      {calendarTheme === "light" ? "Dark" : "Warm"}
+                      {calendarTheme === "light"
+                        ? t.shell.mapShell.compactDark
+                        : t.shell.mapShell.compactWarm}
                     </button>
                     <Link href="/" className="calendar-map-link">
-                      ← Map
+                      {t.shell.summaryCard.backToMap}
                     </Link>
                   </div>
                 </div>
@@ -1120,10 +1244,10 @@ export default function DashboardShell({
                   className={`calendar-command-controls${
                     isCalendarFiltersOpen ? " is-open" : ""
                   }`}
-                  aria-label="Dashboard filters"
+                  aria-label={t.shell.filterBarAria}
                 >
                   <label className="command-control">
-                    <span>Region</span>
+                    <span>{t.shell.regionLabel}</span>
                     <select
                       id="feature-region"
                       value={regionId}
@@ -1131,10 +1255,10 @@ export default function DashboardShell({
                       onChange={(event) => setRegionId(event.target.value)}
                     >
                       {regions.isLoading && (
-                        <option value="">Loading regions…</option>
+                        <option value="">{t.shell.loadingRegions}</option>
                       )}
                       {regions.error && (
-                        <option value="">Region catalog unavailable</option>
+                        <option value="">{t.shell.regionsUnavailable}</option>
                       )}
                       {regions.data?.map((region) => (
                         <option key={region.id} value={region.id}>
@@ -1143,13 +1267,13 @@ export default function DashboardShell({
                       ))}
                       {customRegion && (
                         <option value="custom">
-                          Custom area · grid-approximated
+                          {t.shell.customAreaGridApprox}
                         </option>
                       )}
                     </select>
                   </label>
                   <label className="command-control">
-                    <span>Month</span>
+                    <span>{t.shell.monthLabel}</span>
                     <input
                       id="feature-period"
                       type="month"
@@ -1158,7 +1282,7 @@ export default function DashboardShell({
                     />
                   </label>
                   <label className="command-control">
-                    <span>Metric</span>
+                    <span>{t.shell.metricLabel}</span>
                     <select
                       id="feature-metric"
                       value={metric}
@@ -1172,12 +1296,12 @@ export default function DashboardShell({
                         }
                       }}
                     >
-                      <option value="harmonized">Harmonized</option>
-                      <option value="raw">Raw</option>
+                      <option value="harmonized">{t.shell.mapShell.harmonizedShort}</option>
+                      <option value="raw">{t.shell.mapShell.rawShort}</option>
                     </select>
                   </label>
                   <label className="command-control">
-                    <span>Sensor</span>
+                    <span>{t.shell.sensorLabel}</span>
                     <select
                       id="feature-instrument"
                       value={instrument}
@@ -1193,9 +1317,26 @@ export default function DashboardShell({
                         }
                       }}
                     >
-                      <option value="ALL">All instruments</option>
+                      <option value="ALL">{t.shell.allInstrumentsOption}</option>
                       <option value="MODIS">MODIS</option>
                       <option value="VIIRS">VIIRS</option>
+                    </select>
+                  </label>
+                  <label className="command-control command-control--lang">
+                    <span>{t.languageSelector.heading}</span>
+                    <select
+                      id="calendar-language"
+                      value={language}
+                      aria-label={t.languageSelector.ariaLabel}
+                      onChange={(event) =>
+                        setLanguage(event.target.value as AppLanguage)
+                      }
+                    >
+                      {LANGUAGE_OPTIONS.map((option) => (
+                        <option key={option.code} value={option.code}>
+                          {option.nativeName}
+                        </option>
+                      ))}
                     </select>
                   </label>
                   <span className="command-divider desktop-only-control" aria-hidden="true" />
@@ -1205,25 +1346,23 @@ export default function DashboardShell({
                     aria-pressed={calendarTheme === "light"}
                     onClick={toggleCalendarTheme}
                   >
-                    {calendarTheme === "light" ? "Dark Mode" : "Warm White"}
+                    {calendarTheme === "light"
+                      ? t.shell.summaryCard.darkMode
+                      : t.shell.summaryCard.warmWhite}
                   </button>
                   <Link href="/" className="calendar-map-link desktop-only-control">
-                    ← Map
+                    {t.shell.summaryCard.backToMap}
                   </Link>
                 </div>
               </header>
             ) : (
               <>
                 <h1 className="feature-page-title">
-                  {
-                    dashboardNavItems.find(
-                      (item) => item.feature === resolvedFeature
-                    )?.label
-                  }
+                  {getNavLabel(resolvedFeature, t)}
                 </h1>
-                <div className="feature-filter-bar" aria-label="Dashboard filters">
+                <div className="feature-filter-bar" aria-label={t.shell.filterBarAria}>
                   <div className="filter-field">
-                    <label htmlFor="feature-region">Region</label>
+                    <label htmlFor="feature-region">{t.shell.regionLabel}</label>
                     <select
                       id="feature-region"
                       value={regionId}
@@ -1231,10 +1370,10 @@ export default function DashboardShell({
                       onChange={(event) => setRegionId(event.target.value)}
                     >
                       {regions.isLoading && (
-                        <option value="">Loading regions…</option>
+                        <option value="">{t.shell.loadingRegions}</option>
                       )}
                       {regions.error && (
-                        <option value="">Region catalog unavailable</option>
+                        <option value="">{t.shell.regionsUnavailable}</option>
                       )}
                       {regions.data?.map((region) => (
                         <option key={region.id} value={region.id}>
@@ -1243,13 +1382,13 @@ export default function DashboardShell({
                       ))}
                       {customRegion && (
                         <option value="custom">
-                          Custom area · grid-approximated
+                          {t.shell.customAreaGridApprox}
                         </option>
                       )}
                     </select>
                   </div>
                   <div className="filter-field">
-                    <label htmlFor="feature-period">Month</label>
+                    <label htmlFor="feature-period">{t.shell.monthLabel}</label>
                     <input
                       id="feature-period"
                       type="month"
@@ -1258,7 +1397,7 @@ export default function DashboardShell({
                     />
                   </div>
                   <div className="filter-field">
-                    <label htmlFor="feature-metric">Metric</label>
+                    <label htmlFor="feature-metric">{t.shell.metricLabel}</label>
                     <select
                       id="feature-metric"
                       value={metric}
@@ -1272,12 +1411,12 @@ export default function DashboardShell({
                         }
                       }}
                     >
-                      <option value="harmonized">Harmonized</option>
-                      <option value="raw">Raw</option>
+                      <option value="harmonized">{t.shell.mapShell.harmonizedShort}</option>
+                      <option value="raw">{t.shell.mapShell.rawShort}</option>
                     </select>
                   </div>
                   <div className="filter-field">
-                    <label htmlFor="feature-instrument">Sensor</label>
+                    <label htmlFor="feature-instrument">{t.shell.sensorLabel}</label>
                     <select
                       id="feature-instrument"
                       value={instrument}
@@ -1293,9 +1432,26 @@ export default function DashboardShell({
                         }
                       }}
                     >
-                      <option value="ALL">All instruments</option>
+                      <option value="ALL">{t.shell.allInstrumentsOption}</option>
                       <option value="MODIS">MODIS</option>
                       <option value="VIIRS">VIIRS</option>
+                    </select>
+                  </div>
+                  <div className="filter-field">
+                    <label htmlFor="feature-language">{t.languageSelector.heading}</label>
+                    <select
+                      id="feature-language"
+                      value={language}
+                      aria-label={t.languageSelector.ariaLabel}
+                      onChange={(event) =>
+                        setLanguage(event.target.value as AppLanguage)
+                      }
+                    >
+                      {LANGUAGE_OPTIONS.map((option) => (
+                        <option key={option.code} value={option.code}>
+                          {option.nativeName}
+                        </option>
+                      ))}
                     </select>
                   </div>
                 </div>
@@ -1337,13 +1493,13 @@ export default function DashboardShell({
                   className="export-unavailable-card"
                   aria-labelledby="export-controls-title"
                 >
-                  <p className="eyebrow">FEATURE 05 · DATA EXPORT</p>
-                  <h2 id="export-controls-title">Export data</h2>
-                  <p>Select a region and period to enable the data exports.</p>
+                  <p className="eyebrow">{t.shell.exportUnavailable.eyebrow}</p>
+                  <h2 id="export-controls-title">{t.shell.exportUnavailable.title}</h2>
+                  <p>{t.shell.exportUnavailable.description}</p>
                 </section>
               ))}
             <footer className="page-footer page-footer-compact">
-              <p>FIRE MEMORY · NASA FIRMS MODIS &amp; VIIRS Historical Archive (UTC)</p>
+              <p>{t.shell.footer.compact}</p>
             </footer>
           </section>
         )}
@@ -1359,7 +1515,7 @@ export default function DashboardShell({
           </span>
           <div>
             <h2 id="data-state-title">
-              Some dashboard data could not be loaded
+              {t.shell.errors.title}
             </h2>
             <ul className="data-error-list">
               {dataErrors.map((error, index) => (
@@ -1379,7 +1535,7 @@ export default function DashboardShell({
                 if (harmonization.error) harmonization.retry();
               }}
             >
-              Retry failed requests
+              {t.shell.errors.retry}
             </button>
           </div>
         </section>

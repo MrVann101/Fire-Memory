@@ -11,12 +11,19 @@ import {
 } from "react";
 
 import type { AnomalyLabel, ChildCount, Hotspot, Region } from "@/contracts/types";
+import { useDashboardFilters } from "@/components/dashboard/DashboardFiltersProvider";
 import { AI_MAX_QUESTION_LENGTH } from "@/lib/ai/config";
 import type { AnalyticsSummaryForAi } from "@/lib/ai/request";
 import {
   mergeLiveCountsIntoSummary,
   type LiveCountsSnapshot,
 } from "@/lib/analytics/liveCounts";
+import {
+  LANGUAGE_OPTIONS,
+  getTranslations,
+  normalizeLanguage,
+  type AppLanguage,
+} from "@/lib/i18n/translations";
 
 interface AiBriefResponse {
   answer: string;
@@ -42,7 +49,7 @@ interface WatchlistItem {
   id: string;
   title: string;
   subtitle: string;
-  badgeText: "HIGH" | "MODERATE" | "WATCH";
+  badgeText: string;
   badgeColor: string;
   badgeTone: "critical" | "elevated" | "active" | "standing";
   count: number;
@@ -60,15 +67,6 @@ interface ParsedAdvisorySections {
 
 const DEFAULT_AUTO_QUESTION =
   "Provide a direct CDRRMO situational advisory using real MODIS and VIIRS detection counts, priority places to closely monitor, and BFP/barangay verification guidance for this area and period.";
-
-const SUGGESTED_QUESTIONS = [
-  "What does this month's hotspot count vs. historical median mean for CDRRMO monitoring?",
-  "How should our CDRRMO interpret the VIIRS and MODIS detections for this period?",
-  "What data limitations should we note in our LGU situational briefing?",
-];
-
-const DEFAULT_DISCLAIMER =
-  "CDRRMO Advisory AI interpretation only. Satellite detections are not confirmed fires, forecasts, or emergency instructions.";
 
 function formatAdvisoryAnswer(text: string) {
   const parts = text.split(/(Computed values:|Interpretation:|Limitations:)/gi);
@@ -96,7 +94,11 @@ function cleanAdvisorySection(value: string): string {
     .trim();
 }
 
-function parseStructuredAdvisory(text: string): ParsedAdvisorySections | null {
+function parseStructuredAdvisory(
+  text: string,
+  language: AppLanguage = "en"
+): ParsedAdvisorySections | null {
+  const t = getTranslations(language);
   const computedMatch =
     /Computed values:\s*([\s\S]*?)(?=Interpretation:|Limitations:|$)/i.exec(text);
   const interpretationMatch =
@@ -110,13 +112,13 @@ function parseStructuredAdvisory(text: string): ParsedAdvisorySections | null {
   return {
     computedValues:
       cleanAdvisorySection(computedMatch?.[1] ?? "") ||
-      "See summary metrics above.",
+      t.ai.defaultComputedFallback,
     interpretation:
       cleanAdvisorySection(interpretationMatch?.[1] ?? "") ||
-      "Maintain standard CDRRMO monitoring posture.",
+      t.ai.defaultInterpretationFallback,
     limitations:
       cleanAdvisorySection(limitationsMatch?.[1] ?? "") ||
-      "Satellite hotspots indicate heat sources, not confirmed fires—verify with BFP or barangay responders.",
+      t.ai.defaultLimitationsFallback,
   };
 }
 
@@ -141,69 +143,56 @@ function getErrorMessage(value: unknown): string | null {
   return typeof message === "string" && message.length > 0 ? message : null;
 }
 
-function getDirectPosture(summary: AnalyticsSummaryForAi | null) {
+function getDirectPosture(
+  summary: AnalyticsSummaryForAi | null,
+  language: AppLanguage = "en"
+) {
+  const t = getTranslations(language);
   const label: AnomalyLabel = summary?.label ?? "not_calculable";
-
-  switch (label) {
-    case "unusually_high":
-      return {
-        tone: "unusually_high" as const,
-        badge: "CRITICAL WATCH",
-      };
-    case "above_baseline":
-      return {
-        tone: "above_baseline" as const,
-        badge: "ABOVE NORMAL",
-      };
-    case "near_baseline":
-      return {
-        tone: "near_baseline" as const,
-        badge: "NEAR NORMAL",
-      };
-    case "below_baseline":
-      return {
-        tone: "below_baseline" as const,
-        badge: "BELOW NORMAL",
-      };
-    default:
-      return {
-        tone: "not_calculable" as const,
-        badge: "ACTIVE WATCH",
-      };
-  }
+  const tone =
+    label === "unusually_high" ||
+    label === "above_baseline" ||
+    label === "near_baseline" ||
+    label === "below_baseline"
+      ? label
+      : ("not_calculable" as const);
+  return {
+    tone,
+    badge: t.ai.postureBadges[label],
+  };
 }
 
 function getPriorityStyle(
   count: number,
   anomalyLabel?: AnomalyLabel
 ): {
-  badgeText: "HIGH" | "MODERATE" | "WATCH";
+  badgeKey: "HIGH" | "MODERATE" | "WATCH";
   badgeColor: string;
   badgeTone: WatchlistItem["badgeTone"];
 } {
   if (count >= 5 || (count > 0 && anomalyLabel === "unusually_high")) {
     return {
-      badgeText: "HIGH",
+      badgeKey: "HIGH",
       badgeColor: "var(--hotspot-very-high, #ef4444)",
       badgeTone: "critical",
     };
   }
   if (count >= 2) {
     return {
-      badgeText: "MODERATE",
+      badgeKey: "MODERATE",
       badgeColor: "var(--hotspot-high, #ea580c)",
       badgeTone: "elevated",
     };
   }
   if (count === 1) {
     return {
-      badgeText: "MODERATE",
+      badgeKey: "MODERATE",
       badgeColor: "var(--hotspot-moderate, #f97316)",
       badgeTone: "active",
     };
   }
   return {
-    badgeText: "WATCH",
+    badgeKey: "WATCH",
     badgeColor: "var(--hotspot-low, #fb923c)",
     badgeTone: "standing",
   };
@@ -214,12 +203,14 @@ function buildPriorityWatchlist(
   hotspots: Hotspot[],
   childCounts: ChildCount[],
   regions: Region[],
-  selectedRegion?: Region | null
+  selectedRegion?: Region | null,
+  language: AppLanguage = "en"
 ): {
   scopeBadge: string;
   items: WatchlistItem[];
   showQuickBukidnonJump: boolean;
 } {
+  const t = getTranslations(language);
   const regionId = summary?.region.id ?? selectedRegion?.id ?? "PH";
   const regionName =
     summary?.region.name ?? selectedRegion?.name ?? "The Philippines";
@@ -233,21 +224,21 @@ function buildPriorityWatchlist(
     const corridors = [
       {
         id: "buk-north",
-        title: "Northern Bukidnon",
-        subtitle: "Malaybalay · Impasugong · Manolo Fortich · Sumilao",
+        title: t.ai.corridors.northern.title || "Northern Bukidnon",
+        subtitle: t.ai.corridors.northern.subtitle,
         count: hotspots.filter((h) => h.latitude >= 8.05).length,
       },
       {
         id: "buk-central",
-        title: "Central Bukidnon",
-        subtitle: "Valencia · Maramag · Lantapan · Quezon",
+        title: t.ai.corridors.central.title || "Central Bukidnon",
+        subtitle: t.ai.corridors.central.subtitle,
         count: hotspots.filter((h) => h.latitude >= 7.75 && h.latitude < 8.05)
           .length,
       },
       {
         id: "buk-south",
-        title: "Southern & Western Bukidnon",
-        subtitle: "Don Carlos · Pangantucan · Talakag · Kitaotao",
+        title: t.ai.corridors.southern.title || "Southern & Western Bukidnon",
+        subtitle: t.ai.corridors.southern.subtitle,
         count: hotspots.filter((h) => h.latitude < 7.75).length,
       },
     ];
@@ -259,20 +250,18 @@ function buildPriorityWatchlist(
           id: corridor.id,
           title: corridor.title,
           subtitle: corridor.subtitle,
-          badgeText: priority.badgeText,
+          badgeText: t.ai.badges[priority.badgeKey],
           badgeColor: priority.badgeColor,
           badgeTone: priority.badgeTone,
           count: corridor.count,
-          countLabel: `${corridor.count.toLocaleString("en-US")} hotspot${
-            corridor.count === 1 ? "" : "s"
-          }`,
+          countLabel: t.ai.formatHotspotCount(corridor.count),
           isPinnedBukidnon: true,
         };
       })
       .sort((a, b) => b.count - a.count);
 
     return {
-      scopeBadge: "Bukidnon Sectors",
+      scopeBadge: t.ai.bukidnonSectors,
       items,
       showQuickBukidnonJump: false,
     };
@@ -307,15 +296,14 @@ function buildPriorityWatchlist(
       id: "watch-PH-BUK",
       title: "Bukidnon",
       subtitle: "Valencia · Malaybalay · Manolo Fortich · Maramag",
-      badgeText: bukidnonCount > 0 ? bukPriority.badgeText : "WATCH",
+      badgeText:
+        bukidnonCount > 0 ? t.ai.badges[bukPriority.badgeKey] : t.ai.badges.WATCH,
       badgeColor: bukPriority.badgeColor,
       badgeTone: bukPriority.badgeTone,
       count: bukidnonCount,
-      countLabel: `${bukidnonCount.toLocaleString("en-US")} hotspot${
-        bukidnonCount === 1 ? "" : "s"
-      }`,
+      countLabel: t.ai.formatHotspotCount(bukidnonCount),
       targetRegionId: bukidnonRegion?.id ?? "PH-BUK",
-      actionLabel: "Monitor Bukidnon",
+      actionLabel: t.ai.monitorBukidnon || "Monitor Bukidnon",
       isPinnedBukidnon: true,
     };
 
@@ -326,24 +314,27 @@ function buildPriorityWatchlist(
       return {
         id: `watch-${child.regionId}`,
         title: child.name,
-        subtitle: `Top #${idx + 1} provincial volume`,
-        badgeText: idx === 0 ? "HIGH" : priority.badgeText,
+        subtitle:
+          language === "ceb"
+            ? `Pang-${idx + 1} sa probinsya`
+            : language === "fil"
+              ? `Nangunguna #${idx + 1} sa lalawigan`
+              : `Top #${idx + 1} provincial volume`,
+        badgeText: idx === 0 ? t.ai.badges.HIGH : t.ai.badges[priority.badgeKey],
         badgeColor:
           idx === 0
             ? "var(--hotspot-very-high, #ef4444)"
             : priority.badgeColor,
         badgeTone: idx === 0 ? "critical" : priority.badgeTone,
         count,
-        countLabel: `${count.toLocaleString("en-US")} hotspot${
-          count === 1 ? "" : "s"
-        }`,
+        countLabel: t.ai.formatHotspotCount(count),
         targetRegionId: child.regionId,
-        actionLabel: "View",
+        actionLabel: t.ai.viewButton,
       };
     });
 
     return {
-      scopeBadge: "National Priority",
+      scopeBadge: t.ai.provincesInFocus,
       items: [bukidnonItem, ...otherItems],
       showQuickBukidnonJump: false,
     };
@@ -360,22 +351,52 @@ function buildPriorityWatchlist(
   const localizedSectors = [
     {
       id: `${regionId}-north`,
-      title: `Northern ${regionName}`,
-      subtitle: "Northern sector",
+      title:
+        language === "ceb"
+          ? `Amihanang ${regionName}`
+          : language === "fil"
+            ? `Hilagang ${regionName}`
+            : `Northern ${regionName}`,
+      subtitle:
+        language === "ceb"
+          ? "Amihanang sektor"
+          : language === "fil"
+            ? "Hilagang sektor"
+            : "Northern sector",
       count: hotspots.filter((h) => h.latitude >= northCut).length,
     },
     {
       id: `${regionId}-central`,
-      title: `Central ${regionName}`,
-      subtitle: "Central corridor",
+      title:
+        language === "ceb"
+          ? `Sentral ${regionName}`
+          : language === "fil"
+            ? `Gitnang ${regionName}`
+            : `Central ${regionName}`,
+      subtitle:
+        language === "ceb"
+          ? "Sentral nga koridor"
+          : language === "fil"
+            ? "Gitnang koridor"
+            : "Central corridor",
       count: hotspots.filter(
         (h) => h.latitude >= southCut && h.latitude < northCut
       ).length,
     },
     {
       id: `${regionId}-south`,
-      title: `Southern ${regionName}`,
-      subtitle: "Southern sector",
+      title:
+        language === "ceb"
+          ? `Habagatang ${regionName}`
+          : language === "fil"
+            ? `Timog ${regionName}`
+            : `Southern ${regionName}`,
+      subtitle:
+        language === "ceb"
+          ? "Habagatang sektor"
+          : language === "fil"
+            ? "Timog na sektor"
+            : "Southern sector",
       count: hotspots.filter((h) => h.latitude < southCut).length,
     },
   ];
@@ -387,13 +408,11 @@ function buildPriorityWatchlist(
         id: sector.id,
         title: sector.title,
         subtitle: sector.subtitle,
-        badgeText: priority.badgeText,
+        badgeText: t.ai.badges[priority.badgeKey],
         badgeColor: priority.badgeColor,
         badgeTone: priority.badgeTone,
         count: sector.count,
-        countLabel: `${sector.count.toLocaleString("en-US")} hotspot${
-          sector.count === 1 ? "" : "s"
-        }`,
+        countLabel: t.ai.formatHotspotCount(sector.count),
       };
     })
     .sort((a, b) => b.count - a.count);
@@ -415,6 +434,8 @@ export function AssistantPanel({
   onSelectRegion,
   onClose,
 }: AssistantPanelProps) {
+  const { language, setLanguage } = useDashboardFilters();
+  const t = getTranslations(language);
   const [activeTab, setActiveTab] = useState<"advisory" | "watchlist">(
     "advisory"
   );
@@ -424,11 +445,22 @@ export function AssistantPanel({
   );
   const [questionHint, setQuestionHint] = useState<string | null>(null);
   const [answer, setAnswer] = useState<string | null>(null);
-  const [disclaimer, setDisclaimer] = useState(DEFAULT_DISCLAIMER);
+  const [disclaimer, setDisclaimer] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const requestController = useRef<AbortController | null>(null);
   const lastScopeKeyRef = useRef<string | null>(null);
+  const prevLanguageRef = useRef<AppLanguage>(language);
+  const latestLanguageSyncRef = useRef<{
+    answer: string | null;
+    summary: AnalyticsSummaryForAi | null;
+    lastAskedQuestion: string | null;
+    requestAdvisory: (
+      promptQuestion: string,
+      activeSummary: AnalyticsSummaryForAi | null,
+      languageOverride?: AppLanguage
+    ) => Promise<void>;
+  } | null>(null);
   const answerSectionRef = useRef<HTMLDivElement | null>(null);
   const questionInputRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -451,26 +483,24 @@ export function AssistantPanel({
   const requestAdvisory = useCallback(
     async (
       promptQuestion: string,
-      activeSummary: AnalyticsSummaryForAi | null
+      activeSummary: AnalyticsSummaryForAi | null,
+      languageOverride: AppLanguage = language
     ) => {
+      const targetT = getTranslations(languageOverride);
       const trimmedQuestion = promptQuestion.trim();
 
       if (!activeSummary) {
-        setError(
-          "Select a region and month before asking for a data explanation."
-        );
+        setError(targetT.ai.loadingRegionAnalytics);
         return;
       }
 
       if (trimmedQuestion.length === 0) {
-        setError("Enter a question or choose one of the suggested questions.");
+        setError(targetT.ai.emptyQuestionHint);
         return;
       }
 
       if (trimmedQuestion.length > AI_MAX_QUESTION_LENGTH) {
-        setError(
-          `Keep the question under ${AI_MAX_QUESTION_LENGTH} characters.`
-        );
+        setError(targetT.ai.formatMaxLengthError(AI_MAX_QUESTION_LENGTH));
         return;
       }
 
@@ -494,6 +524,7 @@ export function AssistantPanel({
           body: JSON.stringify({
             summary: payloadSummary,
             question: trimmedQuestion,
+            language: languageOverride,
           }),
           signal: controller.signal,
         });
@@ -501,12 +532,11 @@ export function AssistantPanel({
 
         if (!response.ok) {
           throw new Error(
-            getErrorMessage(body) ??
-              "The AI interpretation could not be loaded."
+            getErrorMessage(body) ?? targetT.ai.errorFallback
           );
         }
         if (!isAiBriefResponse(body)) {
-          throw new Error("The AI returned an invalid response.");
+          throw new Error(targetT.ai.invalidResponse);
         }
 
         setAnswer(body.answer);
@@ -521,7 +551,7 @@ export function AssistantPanel({
         setError(
           caughtError instanceof Error
             ? caughtError.message
-            : "The AI interpretation could not be loaded."
+            : targetT.ai.errorFallback
         );
       } finally {
         if (requestController.current === controller) {
@@ -530,10 +560,10 @@ export function AssistantPanel({
         }
       }
     },
-    [liveCounts, hotspots]
+    [hotspots, language, liveCounts]
   );
 
-  // Reset answer & error when region/period changes so user can click "Get CDRRMO Advisory" for the new scope
+  // Reset answer & error when region/period changes
   useEffect(() => {
     const scopeKey = summary
       ? `${summary.region.id}:${summary.period.year}-${summary.period.month}:${summary.metric}:${summary.instrument}`
@@ -546,10 +576,73 @@ export function AssistantPanel({
     requestController.current?.abort();
     setIsLoading(false);
     setAnswer(null);
+    setDisclaimer(null);
     setError(null);
     setLastAskedQuestion(null);
     setQuestionHint(null);
   }, [summary, selectedRegion]);
+
+  useEffect(() => {
+    latestLanguageSyncRef.current = {
+      answer,
+      summary,
+      lastAskedQuestion,
+      requestAdvisory,
+    };
+  }, [answer, summary, lastAskedQuestion, requestAdvisory]);
+
+  // Regenerate open advisory via external language-change subscription (keeps effect body free of setState)
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+
+    const handleLanguageChange = (event: Event) => {
+      let nextLanguage: AppLanguage;
+      if (event instanceof CustomEvent && typeof event.detail === "string") {
+        nextLanguage = normalizeLanguage(event.detail);
+      } else {
+        try {
+          nextLanguage = normalizeLanguage(
+            window.localStorage.getItem("fire-memory-language")
+          );
+        } catch {
+          return;
+        }
+      }
+
+      if (prevLanguageRef.current === nextLanguage) {
+        return;
+      }
+      prevLanguageRef.current = nextLanguage;
+      setDisclaimer(null);
+
+      const snapshot = latestLanguageSyncRef.current;
+      if (snapshot?.answer && snapshot.summary) {
+        void snapshot.requestAdvisory(
+          snapshot.lastAskedQuestion ?? DEFAULT_AUTO_QUESTION,
+          snapshot.summary,
+          nextLanguage
+        );
+      }
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === "fire-memory-language") {
+        handleLanguageChange(event);
+      }
+    };
+
+    window.addEventListener("fire-memory-language-change", handleLanguageChange);
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.removeEventListener(
+        "fire-memory-language-change",
+        handleLanguageChange
+      );
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
 
   function handleGenerateAdvisory() {
     if (!summary) {
@@ -575,9 +668,7 @@ export function AssistantPanel({
     event.preventDefault();
     const trimmed = question.trim();
     if (!trimmed) {
-      setQuestionHint(
-        "Enter a specific question above or click one of the suggested prompts."
-      );
+      setQuestionHint(t.ai.emptyQuestionHint);
       questionInputRef.current?.focus();
       return;
     }
@@ -595,8 +686,8 @@ export function AssistantPanel({
   }
 
   const posture = useMemo(
-    () => getDirectPosture(effectiveSummary),
-    [effectiveSummary]
+    () => getDirectPosture(effectiveSummary, language),
+    [effectiveSummary, language]
   );
 
   const watchlist = useMemo(
@@ -606,14 +697,15 @@ export function AssistantPanel({
         hotspots,
         childCounts,
         regions,
-        selectedRegion
+        selectedRegion,
+        language
       ),
-    [effectiveSummary, hotspots, childCounts, regions, selectedRegion]
+    [effectiveSummary, hotspots, childCounts, regions, selectedRegion, language]
   );
 
   const structuredBrief = useMemo(
-    () => (answer ? parseStructuredAdvisory(answer) : null),
-    [answer]
+    () => (answer ? parseStructuredAdvisory(answer, language) : null),
+    [answer, language]
   );
 
   const viirsCount =
@@ -628,7 +720,14 @@ export function AssistantPanel({
     summary?.region.name ?? selectedRegion?.name ?? "The Philippines";
   const periodLabel = summary
     ? `${summary.period.year}-${String(summary.period.month).padStart(2, "0")}`
-    : "Live Window";
+    : t.analytics.selectedMonthLegend;
+
+  const liveBadgeLabel =
+    language === "ceb"
+      ? "Live"
+      : language === "fil"
+        ? "Live"
+        : "Live";
 
   return (
     <section
@@ -640,14 +739,14 @@ export function AssistantPanel({
           <div>
             <p className="assistant-eyebrow">CDRRMO AI · DECISION SUPPORT</p>
             <h2 id="assistant-panel-title" className="assistant-title">
-              CDRRMO Fire Advisory
+              {t.ai.title}
             </h2>
           </div>
           {onClose ? (
             <button
               type="button"
               onClick={onClose}
-              aria-label="Close CDRRMO Advisory AI"
+              aria-label={t.ai.closePanel}
               className="assistant-close-button"
             >
               ×
@@ -655,19 +754,41 @@ export function AssistantPanel({
           ) : null}
         </div>
 
-        <div
-          className="assistant-context-pill"
-          aria-label="Active advisory scope"
-        >
-          <span>
-            {regionName} · {periodLabel}
-          </span>
+        <div className="assistant-context-row">
+          <div
+            className="assistant-context-pill"
+            aria-label={t.ai.panelAria}
+          >
+            <span>
+              {regionName} · {periodLabel}
+            </span>
+          </div>
+          <div
+            className="assistant-lang-switcher"
+            role="group"
+            aria-label={t.languageSelector.ariaLabel}
+          >
+            {LANGUAGE_OPTIONS.map((option) => (
+              <button
+                key={option.code}
+                type="button"
+                className={`assistant-lang-btn${
+                  language === option.code ? " is-active" : ""
+                }`}
+                aria-pressed={language === option.code}
+                title={option.nativeName}
+                onClick={() => setLanguage(option.code)}
+              >
+                {option.shortLabel}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div
           className="assistant-tabs"
           role="tablist"
-          aria-label="Advisory and Watchlist views"
+          aria-label={t.ai.panelAria}
           style={{
             display: "grid",
             gridTemplateColumns: "1fr 1fr",
@@ -704,7 +825,7 @@ export function AssistantPanel({
               cursor: "pointer",
             }}
           >
-            Advisory
+            {t.ai.tabAdvisory}
           </button>
           <button
             type="button"
@@ -732,7 +853,7 @@ export function AssistantPanel({
               fontVariantNumeric: "tabular-nums",
             }}
           >
-            Watchlist ({watchlist.items.length})
+            {t.ai.tabWatchlist} ({watchlist.items.length})
           </button>
         </div>
       </div>
@@ -744,7 +865,7 @@ export function AssistantPanel({
       >
         <div
           className={`assistant-direct-banner assistant-direct-banner--${posture.tone}`}
-          aria-label="CDRRMO key metrics"
+          aria-label={t.ai.title}
           style={{ marginTop: 0, padding: "10px 12px" }}
         >
           <div
@@ -753,18 +874,21 @@ export function AssistantPanel({
             style={{ marginTop: 0 }}
           >
             <div className="assistant-kpi-box" role="listitem">
-              <span className="assistant-kpi-label">Hotspots</span>
+              <span className="assistant-kpi-label">{t.ai.hotspotsKpi}</span>
               <strong className="assistant-kpi-value">
                 {currentCount != null
                   ? currentCount.toLocaleString("en-US")
                   : "0"}
               </strong>
               <span className="assistant-kpi-sub">
-                VIIRS {viirsCount ?? 0} · MODIS {modisCount ?? 0}
+                {t.ai.formatSensorSplit(
+                  String(viirsCount ?? 0),
+                  String(modisCount ?? 0)
+                )}
               </span>
             </div>
             <div className="assistant-kpi-box" role="listitem">
-              <span className="assistant-kpi-label">Normal Median</span>
+              <span className="assistant-kpi-label">{t.ai.normalMedianKpi}</span>
               <strong className="assistant-kpi-value">
                 {summary?.historicalMedian != null
                   ? summary.historicalMedian.toLocaleString("en-US")
@@ -772,18 +896,18 @@ export function AssistantPanel({
               </strong>
               <span className="assistant-kpi-sub">
                 {summary?.baselineYears.length
-                  ? `${summary.baselineYears.length}yr baseline`
-                  : "Historical"}
+                  ? `${summary.baselineYears.length}${language === "en" ? "yr baseline" : ` ${t.analytics.yearsSuffix}`}`
+                  : t.analytics.historicalMedianLegend}
               </span>
             </div>
             <div className="assistant-kpi-box" role="listitem">
-              <span className="assistant-kpi-label">Status</span>
+              <span className="assistant-kpi-label">{t.ai.statusKpi}</span>
               <strong
                 className={`assistant-kpi-value assistant-kpi-value--${posture.tone}`}
               >
                 {summary?.anomalyPercent != null
                   ? `${summary.anomalyPercent > 0 ? "+" : ""}${summary.anomalyPercent.toFixed(1)}%`
-                  : "Live"}
+                  : liveBadgeLabel}
               </strong>
               <span className="assistant-kpi-sub">{posture.badge}</span>
             </div>
@@ -806,13 +930,13 @@ export function AssistantPanel({
             letterSpacing: "0.02em",
           }}
         >
-          {isLoading ? "Generating Advisory…" : "Get CDRRMO Advisory"}
+          {isLoading ? t.ai.generating : t.ai.generateAdvisory || "Get CDRRMO Advisory"}
         </button>
 
         <div ref={answerSectionRef} aria-live="polite" className="assistant-answer">
           {lastAskedQuestion ? (
             <p className="assistant-question-echo">
-              <strong>Question:</strong> {lastAskedQuestion}
+              <strong>{t.ai.questionPrefix}</strong> {lastAskedQuestion}
             </p>
           ) : null}
           {error ? (
@@ -828,7 +952,7 @@ export function AssistantPanel({
 
           {isLoading ? (
             <p className="assistant-answer-copy" style={{ marginTop: 0 }}>
-              Generating CDRRMO advisory…
+              {t.ai.generating}
             </p>
           ) : answer && structuredBrief ? (
             <div
@@ -837,7 +961,7 @@ export function AssistantPanel({
             >
               <article className="assistant-brief-card">
                 <strong className="assistant-section-heading">
-                  Summary{" "}
+                  {t.ai.summaryHeading}{" "}
                   <span className="sr-only">Computed values:</span>
                 </strong>
                 <p className="assistant-brief-card-body">
@@ -846,7 +970,7 @@ export function AssistantPanel({
               </article>
               <article className="assistant-brief-card assistant-brief-card--highlight">
                 <strong className="assistant-section-heading">
-                  CDRRMO Action{" "}
+                  {t.ai.actionHeading}{" "}
                   <span className="sr-only">Interpretation:</span>
                 </strong>
                 <p className="assistant-brief-card-body">
@@ -855,7 +979,7 @@ export function AssistantPanel({
               </article>
               <article className="assistant-brief-card">
                 <strong className="assistant-section-heading">
-                  Note <span className="sr-only">Limitations:</span>
+                  {t.ai.noteHeading} <span className="sr-only">Limitations:</span>
                 </strong>
                 <p className="assistant-brief-card-body">
                   {structuredBrief.limitations}
@@ -871,21 +995,20 @@ export function AssistantPanel({
             </p>
           ) : (
             <p className="assistant-answer-copy" style={{ marginTop: 0 }}>
-              Click <strong>Get CDRRMO Advisory</strong> above to generate a
-              concise situational briefing for {regionName}.
+              {t.ai.emptyAdvisoryPrompt} ({regionName})
             </p>
           )}
         </div>
 
         <details className="assistant-followup-details">
           <summary className="assistant-followup-summary">
-            Ask a specific question (optional)
+            {t.ai.followupSummary}
           </summary>
           <div
             className="assistant-suggestions"
-            aria-label="Suggested questions"
+            aria-label={t.ai.followupSummary}
           >
-            {SUGGESTED_QUESTIONS.map((suggestedQuestion) => (
+            {t.ai.suggestedQuestions.map((suggestedQuestion) => (
               <button
                 key={suggestedQuestion}
                 type="button"
@@ -899,7 +1022,7 @@ export function AssistantPanel({
           </div>
           <form className="assistant-form" onSubmit={submitQuestion}>
             <label htmlFor="assistant-question" className="sr-only">
-              Question for the CDRRMO Advisory AI
+              {t.ai.questionSrLabel}
             </label>
             <textarea
               ref={questionInputRef}
@@ -914,14 +1037,14 @@ export function AssistantPanel({
               onKeyDown={handleQuestionKeyDown}
               maxLength={AI_MAX_QUESTION_LENGTH}
               rows={2}
-              placeholder="Ask a specific CDRRMO question…"
+              placeholder={t.ai.questionPlaceholder}
               className="assistant-question"
               aria-describedby="assistant-question-help assistant-error"
               disabled={isLoading || !summary}
             />
             {!summary ? (
               <p className="assistant-question-hint" role="status">
-                Loading region analytics before questions can be submitted…
+                {t.ai.loadingRegionAnalytics}
               </p>
             ) : questionHint ? (
               <p className="assistant-question-hint" role="status">
@@ -937,7 +1060,7 @@ export function AssistantPanel({
                 disabled={isLoading || !summary}
                 className="assistant-submit"
               >
-                {isLoading ? "Generating…" : "Ask Advisory"}
+                {isLoading ? t.ai.generating : t.ai.askAdvisory}
               </button>
             </div>
           </form>
@@ -956,7 +1079,7 @@ export function AssistantPanel({
               id="assistant-watchlist-heading"
               className="assistant-watchlist-title"
             >
-              Places to Closely Monitor
+              {t.ai.watchlistHeading}
             </h3>
             <span className="assistant-watchlist-badge assistant-watchlist-scope">
               {watchlist.scopeBadge}
@@ -968,7 +1091,7 @@ export function AssistantPanel({
               className="assistant-watchlist-jump"
               onClick={() => onSelectRegion("PH-BUK")}
             >
-              Monitor Bukidnon
+              {t.ai.monitorBukidnon || "Monitor Bukidnon"}
             </button>
           ) : null}
         </div>
@@ -1018,7 +1141,7 @@ export function AssistantPanel({
                       }
                     }}
                   >
-                    View
+                    {item.actionLabel ?? t.ai.viewButton}
                   </button>
                 ) : null}
               </div>
@@ -1027,7 +1150,9 @@ export function AssistantPanel({
         </div>
       </div>
 
-      <p className="assistant-disclaimer">{disclaimer}</p>
+      <p className="assistant-disclaimer">
+        {disclaimer ?? t.ai.defaultDisclaimer}
+      </p>
     </section>
   );
 }

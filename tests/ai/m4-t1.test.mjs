@@ -76,3 +76,56 @@ test("keeps the question separate from the analytics JSON", () => {
   assert.match(AI_SYSTEM_INSTRUCTION, /not confirmed fires/i);
   assert.match(AI_SYSTEM_INSTRUCTION, /grid-approximated/i);
 });
+
+test("aiBriefRequestSchema accepts en, ceb, and fil and defaults missing language to en", () => {
+  const defaulted = aiBriefRequestSchema.parse({
+    summary,
+    question: "What does the historical comparison show?",
+  });
+  assert.equal(defaulted.language, "en");
+
+  const cebuano = aiBriefRequestSchema.parse({
+    summary,
+    question: "Unsay kahulogan sa mga ihap karon?",
+    language: "ceb",
+  });
+  assert.equal(cebuano.language, "ceb");
+
+  const filipino = aiBriefRequestSchema.parse({
+    summary,
+    question: "Ano ang ibig sabihin ng mga bilang ngayon?",
+    language: "fil",
+  });
+  assert.equal(filipino.language, "fil");
+
+  const invalidLang = aiBriefRequestSchema.safeParse({
+    summary,
+    question: "What happened?",
+    language: "es",
+  });
+  assert.equal(invalidLang.success, false);
+
+  const extraField = aiBriefRequestSchema.safeParse({
+    summary,
+    question: "Unsay kahimtang?",
+    language: "ceb",
+    unexpected: true,
+  });
+  assert.equal(extraField.success, false);
+});
+
+test("buildBriefUserContent places Cebuano and Filipino instructions after END ANALYTICS SUMMARY JSON", () => {
+  assert.match(AI_SYSTEM_INSTRUCTION, /RESPONSE LANGUAGE/);
+  assert.match(AI_SYSTEM_INSTRUCTION, /Computed values:.*Interpretation:.*Limitations:/);
+
+  const cebPrompt = buildBriefUserContent(summary, "Unsay kahimtang?", "ceb");
+  const jsonEndIndex = cebPrompt.indexOf("END ANALYTICS SUMMARY JSON");
+  const questionStartIndex = cebPrompt.indexOf("BEGIN USER QUESTION");
+  const cebDirectiveIndex = cebPrompt.indexOf("RESPONSE LANGUAGE: Cebuano / Bisaya.");
+
+  assert.ok(jsonEndIndex > -1 && questionStartIndex > jsonEndIndex);
+  assert.ok(cebDirectiveIndex > questionStartIndex);
+
+  const filPrompt = buildBriefUserContent(summary, "Ano ang kalagayan?", "fil");
+  assert.match(filPrompt, /RESPONSE LANGUAGE: Filipino \/ Tagalog\./);
+});

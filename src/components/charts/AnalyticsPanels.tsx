@@ -9,6 +9,12 @@ import type {
   OverlapPoint,
 } from "@/contracts/types";
 import type { ClientResource } from "@/hooks/useClientResource";
+import { useDashboardFilters } from "@/components/dashboard/DashboardFiltersProvider";
+import {
+  getMonthName,
+  getTranslations,
+  type AppLanguage,
+} from "@/lib/i18n/translations";
 
 export interface LiveCountsSnapshot {
   viirs: number;
@@ -34,69 +40,93 @@ interface HistoryBarPoint {
   band: HistoryBand;
 }
 
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-const anomalyPresentation: Record<
+const ANOMALY_META: Record<
   AnomalyLabel,
   {
     icon: string;
-    label: string;
-    posture: string;
-    advisory: string;
+    postureByLang: Record<AppLanguage, string>;
   }
 > = {
   below_baseline: {
     icon: "↓",
-    label: "Below Historical Baseline",
-    posture: "ROUTINE MONITORING",
-    advisory:
-      "Maintain standard seasonal fire monitoring and routine barangay reporting.",
+    postureByLang: {
+      en: "ROUTINE MONITORING",
+      ceb: "REGULAR NGA PAGBANTAY",
+      fil: "KARANIWANG PAGBABANTAY",
+    },
   },
   near_baseline: {
     icon: "≈",
-    label: "Near Historical Baseline",
-    posture: "STANDARD WATCH",
-    advisory:
-      "Maintain standard seasonal fire monitoring and routine barangay reporting.",
+    postureByLang: {
+      en: "STANDARD WATCH",
+      ceb: "NORMAL NGA BANTAY",
+      fil: "STANDARD NA BANTAY",
+    },
   },
   above_baseline: {
     icon: "↑",
-    label: "Above Historical Baseline",
-    posture: "ELEVATED CDRRMO WATCH",
-    advisory:
-      "Increase monitoring frequency for recurring thermal detections and cross-check with local field reports.",
+    postureByLang: {
+      en: "ELEVATED CDRRMO WATCH",
+      ceb: "TAAS NGA BANTAY SA CDRRMO",
+      fil: "PINATAAS NA BANTAY NG CDRRMO",
+    },
   },
   unusually_high: {
     icon: "!",
-    label: "Unusually High Activity",
-    posture: "PRIORITY GROUND VERIFICATION",
-    advisory:
-      "Coordinate with BFP and Barangay DRRMCs to verify persistent hotspot clusters on the ground and review local preparedness posture.",
+    postureByLang: {
+      en: "PRIORITY GROUND VERIFICATION",
+      ceb: "UNAHONG PAGPASUSI SA FIELD",
+      fil: "PRAYORIDAD NA BERIPIKASYON SA LUPA",
+    },
   },
   not_calculable: {
     icon: "—",
-    label: "Baseline Comparison Unavailable",
-    posture: "DATA COVERAGE CHECK",
-    advisory:
-      "Historical median is zero or unavailable; review raw sensor detections directly and verify local coverage.",
+    postureByLang: {
+      en: "DATA COVERAGE CHECK",
+      ceb: "PAG-SUSI SA SAKOP SA DATOS",
+      fil: "PAGSUSURI NG SAKLAW NG DATOS",
+    },
   },
 };
 
-function formatCount(value: number | null): string {
-  return value === null ? "No data" : value.toLocaleString("en-US");
+function getAnomalyPresentation(label: AnomalyLabel, language: AppLanguage) {
+  const t = getTranslations(language);
+  const meta = ANOMALY_META[label] ?? ANOMALY_META.not_calculable;
+  const advisory =
+    label === "unusually_high"
+      ? language === "ceb"
+        ? "Makig-coordinate sa BFP ug Barangay DRRMC aron susihon sa field ang mga nagtapok nga hotspot ug susihon ang kahandaan sa LGU."
+        : language === "fil"
+          ? "Makipag-ugnayan sa BFP at Barangay DRRMC upang beripikahin sa lupa ang mga kumpol ng hotspot at suriin ang kahandaan ng LGU."
+          : "Coordinate with BFP and Barangay DRRMCs to verify persistent hotspot clusters on the ground and review local preparedness posture."
+      : label === "above_baseline"
+        ? language === "ceb"
+          ? "Dugangi ang pagbantay sa mga nagbalik-balik nga init sa satelayt ug itandi sa mga report gikan sa field."
+          : language === "fil"
+            ? "Dagdagan ang pagbabantay sa mga paulit-ulit na deteksyon ng init at itugma sa mga ulat mula sa komunidad."
+            : "Increase monitoring frequency for recurring thermal detections and cross-check with local field reports."
+        : label === "not_calculable"
+          ? language === "ceb"
+            ? "Walay saktong medyan sa kasaysayan o zero kini; susiha direkta ang mga ihap sa sensor ug sakop sa datos."
+            : language === "fil"
+              ? "Walang magagamit o zero ang medyan sa kasaysayan; direktang suriin ang mga deteksyon ng sensor at saklaw ng datos."
+              : "Historical median is zero or unavailable; review raw sensor detections directly and verify local coverage."
+          : language === "ceb"
+            ? "Ipadayon ang naandang pagbantay sa panahon ug regular nga koordinasyon sa mga barangay."
+            : language === "fil"
+              ? "Panatilihin ang karaniwang pagbabantay sa panahon at regular na pag-uulat ng mga barangay."
+              : "Maintain standard seasonal fire monitoring and routine barangay reporting.";
+
+  return {
+    icon: meta.icon,
+    label: t.analytics.statusPostures[label],
+    posture: meta.postureByLang[language],
+    advisory,
+  };
+}
+
+function formatCount(value: number | null, noDataLabel = "No data"): string {
+  return value === null ? noDataLabel : value.toLocaleString("en-US");
 }
 
 function formatYears(years: number[]): string {
@@ -109,8 +139,12 @@ function formatMetric(value: number | null, suffix = ""): string {
     : `${value.toLocaleString("en-US", { maximumFractionDigits: 4 })}${suffix}`;
 }
 
-function formatPeriodMonth(year: number, month: number): string {
-  const monthName = MONTH_NAMES[month - 1] ?? `Month ${month}`;
+function formatPeriodMonth(
+  year: number,
+  month: number,
+  language: AppLanguage = "en"
+): string {
+  const monthName = getMonthName(month, language);
   return `${monthName} ${year}`;
 }
 
@@ -259,13 +293,34 @@ export function AnomalyPanel({
   calendar?: CalendarResponse | null;
   liveCounts?: LiveCountsSnapshot | null;
 }) {
+  const { language } = useDashboardFilters();
+  const t = getTranslations(language);
   const summary = resource.data;
-  const anomaly = summary ? anomalyPresentation[summary.label] : null;
+  const anomaly = summary ? getAnomalyPresentation(summary.label, language) : null;
   const title = resource.isLoading
-    ? "Loading baseline comparison…"
+    ? t.analytics.loadingComparison
     : resource.error
-      ? "Baseline comparison unavailable"
-      : anomaly?.label ?? "No comparison loaded";
+      ? t.analytics.comparisonUnavailable
+      : anomaly?.label ?? t.analytics.emptyTitle;
+
+  const loadingText =
+    language === "ceb"
+      ? "Nagkarga…"
+      : language === "fil"
+        ? "Nilo-load…"
+        : "Loading…";
+  const unavailableText =
+    language === "ceb"
+      ? "Dili magamit"
+      : language === "fil"
+        ? "Hindi magagamit"
+        : "Unavailable";
+  const notAvailableText =
+    language === "ceb"
+      ? "Walay datos"
+      : language === "fil"
+        ? "Walang datos"
+        : "Not available";
 
   const isLiveFallback =
     summary !== null &&
@@ -305,11 +360,11 @@ export function AnomalyPanel({
       : 0;
 
   const periodLabel = summary
-    ? formatPeriodMonth(summary.period.year, summary.period.month)
+    ? formatPeriodMonth(summary.period.year, summary.period.month, language)
     : null;
   const monthOnlyLabel = summary
-    ? (MONTH_NAMES[summary.period.month - 1] ?? `Month ${summary.period.month}`)
-    : "Selected Month";
+    ? getMonthName(summary.period.month, language)
+    : t.analytics.selectedMonthLegend;
 
   const effectiveAnomalyPercentValue =
     summary &&
@@ -323,15 +378,15 @@ export function AnomalyPanel({
   const anomalyPercent = summary
     ? effectiveAnomalyPercentValue === null
       ? summary.label === "not_calculable"
-        ? "Not calculable"
-        : "Not available"
+        ? t.calendar.labels.not_calculable
+        : notAvailableText
       : `${effectiveAnomalyPercentValue > 0 ? "+" : ""}${effectiveAnomalyPercentValue.toLocaleString("en-US", {
           minimumFractionDigits: 1,
           maximumFractionDigits: 1,
         })}%`
     : resource.isLoading
-      ? "Loading…"
-      : "Unavailable";
+      ? loadingText
+      : unavailableText;
 
   const historyBars = summary
     ? buildSameMonthHistoryBars(
@@ -360,6 +415,16 @@ export function AnomalyPanel({
       ? baselineY - (historicalMedian / maxVal) * plotHeight
       : null;
 
+  const liveWindowLabel =
+    language === "ceb"
+      ? "Live nga datos"
+      : language === "fil"
+        ? "Live na datos"
+        : "Live window";
+  const observedLabel = t.calendar.recordedData;
+  const estimatedLabel = t.calendar.legendEstimated;
+  const activeCellDaysLabel = t.shell.summaryCard.activeCellDays;
+
   return (
     <section
       className="analytics-panel anomaly-panel"
@@ -367,8 +432,8 @@ export function AnomalyPanel({
     >
       <div className="analytics-panel-heading">
         <div>
-          <p className="eyebrow">CDRRMO BASELINE ASSESSMENT</p>
-          <h2 id="anomaly-title">Monthly Anomaly &amp; Operational Posture</h2>
+          <p className="eyebrow">{t.analytics.anomalyEyebrow}</p>
+          <h2 id="anomaly-title">{t.analytics.anomalyTitle}</h2>
         </div>
         {anomaly && summary && (
           <div className="anomaly-heading-badges">
@@ -412,16 +477,16 @@ export function AnomalyPanel({
       <div
         className="anomaly-kpi-grid"
         role="list"
-        aria-label="Monthly anomaly key metrics"
+        aria-label={t.analytics.anomalyTitle}
       >
         <div className="anomaly-kpi-card" role="listitem">
-          <span className="anomaly-kpi-label">Selected Month</span>
+          <span className="anomaly-kpi-label">{t.analytics.selectedActivity}</span>
           <strong className="anomaly-kpi-value">
             {summary
-              ? formatCount(effectiveCurrentCount)
+              ? formatCount(effectiveCurrentCount, notAvailableText)
               : resource.isLoading
-                ? "Loading…"
-                : "Unavailable"}
+                ? loadingText
+                : unavailableText}
           </strong>
           <span
             className={`anomaly-kpi-sub${
@@ -430,32 +495,32 @@ export function AnomalyPanel({
           >
             {summary
               ? isLiveFallback
-                ? "Live window"
+                ? liveWindowLabel
                 : summary.currentIsEstimated
-                  ? "Estimated"
-                  : "Observed"
-              : "Active cell-days"}
+                  ? estimatedLabel
+                  : observedLabel
+              : activeCellDaysLabel}
           </span>
         </div>
 
         <div className="anomaly-kpi-card" role="listitem">
-          <span className="anomaly-kpi-label">Typical Median</span>
+          <span className="anomaly-kpi-label">{t.analytics.sameMonthMedian}</span>
           <strong className="anomaly-kpi-value">
             {summary
-              ? formatCount(summary.historicalMedian)
+              ? formatCount(summary.historicalMedian, notAvailableText)
               : resource.isLoading
-                ? "Loading…"
-                : "Unavailable"}
+                ? loadingText
+                : unavailableText}
           </strong>
           <span className="anomaly-kpi-sub">
             {summary
-              ? `${summary.baselineYears.length} baseline yrs`
-              : "Same-month norm"}
+              ? `${summary.baselineYears.length} ${t.analytics.yearsSuffix}`
+              : t.analytics.historicalMedianLegend}
           </span>
         </div>
 
         <div className="anomaly-kpi-card" role="listitem">
-          <span className="anomaly-kpi-label">vs. Baseline</span>
+          <span className="anomaly-kpi-label">{t.analytics.anomalyDelta}</span>
           <strong
             className={`anomaly-kpi-value${
               summary ? ` anomaly-kpi-value--${summary.label}` : ""
@@ -464,24 +529,26 @@ export function AnomalyPanel({
             {anomalyPercent}
           </strong>
           <span className="anomaly-kpi-sub">
-            {anomaly ? anomaly.label : "Deviation"}
+            {anomaly ? anomaly.label : t.analytics.anomalyDelta}
           </span>
         </div>
 
         <div className="anomaly-kpi-card" role="listitem">
-          <span className="anomaly-kpi-label">Sensor Split</span>
+          <span className="anomaly-kpi-label">{t.analytics.sensorMix}</span>
           <strong className="anomaly-kpi-value anomaly-kpi-value--split">
             {summary
-              ? `VIIRS ${formatCount(
+              ? `${t.analytics.viirsLabel} ${formatCount(
                   summary.byInstrument.VIIRS ??
-                    (liveCounts ? liveCounts.viirs : null)
-                )} · MODIS ${formatCount(
+                    (liveCounts ? liveCounts.viirs : null),
+                  notAvailableText
+                )} · ${t.analytics.modisLabel} ${formatCount(
                   summary.byInstrument.MODIS ??
-                    (liveCounts ? liveCounts.modis : null)
+                    (liveCounts ? liveCounts.modis : null),
+                  notAvailableText
                 )}`
               : resource.isLoading
-                ? "Loading…"
-                : "Unavailable"}
+                ? loadingText
+                : unavailableText}
           </strong>
           <span className="anomaly-kpi-sub">375m VIIRS · 1km MODIS</span>
         </div>
@@ -492,37 +559,36 @@ export function AnomalyPanel({
           <div
             className="anomaly-history-chart"
             role="group"
-            aria-label={`${monthOnlyLabel} year-by-year hotspot comparison`}
+            aria-label={t.analytics.formatYoyChartTitle(monthOnlyLabel)}
           >
             <div className="anomaly-chart-header">
               <div>
                 <h3 className="anomaly-chart-title">
-                  {monthOnlyLabel} Hotspot Detections by Year
+                  {t.analytics.formatYoyChartTitle(monthOnlyLabel)}
                 </h3>
                 <p className="anomaly-chart-subtitle">
-                  Same-month active cell-days ({summary.region.name})
+                  {activeCellDaysLabel} ({summary.region.name})
                 </p>
               </div>
               <span className="anomaly-chart-median-badge">
-                Dashed line = Typical {monthOnlyLabel} Median (
-                {formatCount(summary.historicalMedian)})
+                {t.analytics.medianLabel}: {formatCount(summary.historicalMedian, notAvailableText)}
               </span>
             </div>
 
             <div className="chart-scroll">
               {historyBars.length === 0 ? (
                 <p className="chart-message" role="status">
-                  No same-month historical observations are recorded for this area yet.
+                  {t.analytics.emptyBody}
                 </p>
               ) : (
               <svg
                 className="anomaly-history-svg"
                 viewBox="0 0 720 210"
                 role="img"
-                aria-label={`${monthOnlyLabel} year-by-year hotspot comparison chart`}
+                aria-label={t.analytics.formatYoyChartTitle(monthOnlyLabel)}
               >
                 <title>
-                  {monthOnlyLabel} Hotspot Detections by Year ({summary.region.name})
+                  {t.analytics.formatYoyChartTitle(monthOnlyLabel)} ({summary.region.name})
                 </title>
                 {gridTicks.map((tickVal, idx) => {
                   const tickY = baselineY - (tickVal / maxVal) * plotHeight;
@@ -568,17 +634,21 @@ export function AnomalyPanel({
                     ? "#38bdf8"
                     : getHistoryBandColor(bar.band);
 
+                  const displayBarLabel = bar.isMedianBenchmark
+                    ? t.analytics.medianLabel
+                    : bar.label;
+
                   return (
                     <g key={bar.key}>
                       <title>
                         {bar.isMedianBenchmark
-                          ? `Typical ${monthOnlyLabel} Median`
+                          ? t.analytics.historicalMedianLegend
                           : `${monthOnlyLabel} ${bar.year}`}
                         : {bar.count.toLocaleString("en-US")} cell-days
                         {bar.isSelected
-                          ? " (Selected Year)"
+                          ? ` (${t.analytics.selectedMonthLegend})`
                           : bar.estimated
-                            ? " (MODIS-estimated)"
+                            ? ` (${estimatedLabel})`
                             : ""}
                       </title>
                       <rect
@@ -620,7 +690,7 @@ export function AnomalyPanel({
                         fontSize="11"
                         fontWeight={bar.isSelected ? "700" : "500"}
                       >
-                        {bar.label}
+                        {displayBarLabel}
                       </text>
                     </g>
                   );
@@ -660,7 +730,7 @@ export function AnomalyPanel({
                         fontSize="10"
                         fontWeight="700"
                       >
-                        Med: {formatCount(summary.historicalMedian)}
+                        Med: {formatCount(summary.historicalMedian, notAvailableText)}
                       </text>
                     </g>
                   </g>
@@ -671,7 +741,7 @@ export function AnomalyPanel({
 
             <div
               className="anomaly-chart-legend"
-              aria-label="Anomaly severity color key"
+              aria-label={t.analytics.anomalyTitle}
             >
               <span className="anomaly-legend-item">
                 <span
@@ -679,7 +749,7 @@ export function AnomalyPanel({
                   style={{ background: "#fb923c" }}
                   aria-hidden="true"
                 />
-                Below Normal (&lt;-25%)
+                {t.analytics.statusPostures.below_baseline} (&lt;-25%)
               </span>
               <span className="anomaly-legend-item">
                 <span
@@ -687,7 +757,7 @@ export function AnomalyPanel({
                   style={{ background: "#14b8a6" }}
                   aria-hidden="true"
                 />
-                Near Normal (±25%)
+                {t.analytics.statusPostures.near_baseline} (±25%)
               </span>
               <span className="anomaly-legend-item">
                 <span
@@ -695,7 +765,7 @@ export function AnomalyPanel({
                   style={{ background: "#ea580c" }}
                   aria-hidden="true"
                 />
-                Above Normal (+25% to +75%)
+                {t.analytics.statusPostures.above_baseline} (+25%..+75%)
               </span>
               <span className="anomaly-legend-item">
                 <span
@@ -703,7 +773,7 @@ export function AnomalyPanel({
                   style={{ background: "#ef4444" }}
                   aria-hidden="true"
                 />
-                Unusually High (&gt;+75%)
+                {t.analytics.statusPostures.unusually_high} (&gt;+75%)
               </span>
               <span className="anomaly-legend-item">
                 <span
@@ -711,7 +781,7 @@ export function AnomalyPanel({
                   style={{ borderTop: "2px dashed #38bdf8" }}
                   aria-hidden="true"
                 />
-                Typical Median Line
+                {t.analytics.historicalMedianLegend}
               </span>
             </div>
           </div>
@@ -719,16 +789,16 @@ export function AnomalyPanel({
           <div
             className="anomaly-comparison-meter"
             role="group"
-            aria-label="Visual comparison of selected month detections versus typical same-month baseline"
+            aria-label={t.analytics.anomalyTitle}
           >
             <div className="anomaly-meter-header">
               <span className="anomaly-meter-title">
-                Selected Month vs. Typical {monthOnlyLabel} Baseline
+                {t.analytics.selectedMonthLegend} vs. {t.analytics.sameMonthMedian} ({monthOnlyLabel})
               </span>
               <span className="anomaly-meter-delta">
                 {effectiveAnomalyPercentValue === null
-                  ? "Percentage deviation unavailable"
-                  : `${anomalyPercent} vs. typical ${monthOnlyLabel}`}
+                  ? t.analytics.noHistoricalBaseline
+                  : `${anomalyPercent} vs. ${t.analytics.medianLabel}`}
               </span>
             </div>
 
@@ -736,18 +806,18 @@ export function AnomalyPanel({
               <div className="anomaly-meter-row">
                 <div className="anomaly-meter-row-meta">
                   <span className="anomaly-meter-row-label">
-                    Selected Month ({periodLabel})
+                    {t.analytics.selectedMonthLegend} ({periodLabel})
                   </span>
                   <strong className="anomaly-meter-row-value">
                     {effectiveCurrentCount !== null
-                      ? `${formatCount(effectiveCurrentCount)}${
+                      ? `${formatCount(effectiveCurrentCount, notAvailableText)}${
                           isLiveFallback
-                            ? " · Live window"
+                            ? ` · ${liveWindowLabel}`
                             : summary.currentIsEstimated
-                              ? " · Estimated"
+                              ? ` · ${estimatedLabel}`
                               : ""
                         }`
-                      : "In-progress month (see historical chart above)"}
+                      : notAvailableText}
                   </strong>
                 </div>
                 <div className="anomaly-meter-track" aria-hidden="true">
@@ -764,11 +834,11 @@ export function AnomalyPanel({
               <div className="anomaly-meter-row">
                 <div className="anomaly-meter-row-meta">
                   <span className="anomaly-meter-row-label">
-                    Typical Baseline ({summary.baselineYears.length}{" "}
-                    {summary.baselineYears.length === 1 ? "yr" : "yrs"} median)
+                    {t.analytics.sameMonthMedian} ({summary.baselineYears.length}{" "}
+                    {t.analytics.yearsSuffix})
                   </span>
                   <strong className="anomaly-meter-row-value">
-                    {formatCount(summary.historicalMedian)}
+                    {formatCount(summary.historicalMedian, notAvailableText)}
                   </strong>
                 </div>
                 <div className="anomaly-meter-track" aria-hidden="true">
@@ -786,11 +856,11 @@ export function AnomalyPanel({
           <div
             className={`anomaly-cdrrmo-advisory advisory-${summary.label}`}
             role="note"
-            aria-label="CDRRMO Recommended Monitoring Focus"
+            aria-label={anomaly.posture}
           >
             <div className="anomaly-advisory-header">
               <span className="anomaly-advisory-title">
-                CDRRMO Recommended Monitoring Focus
+                {t.ai.actionHeading}
               </span>
               <span
                 className={`anomaly-posture-badge posture-${summary.label}`}
@@ -804,11 +874,11 @@ export function AnomalyPanel({
       )}
 
       <details className="anomaly-technical-details">
-        <summary>Baseline coverage &amp; technical notes</summary>
+        <summary>{t.analytics.technicalDetailsSummary}</summary>
         <div className="anomaly-technical-body">
           <dl className="analytics-details">
             <div>
-              <dt>Historical Baseline Years Used</dt>
+              <dt>{t.analytics.baselineYearsLabel}</dt>
               <dd>
                 {summary ? (
                   <>
@@ -816,28 +886,28 @@ export function AnomalyPanel({
                     {summary.estimatedBaselineYears.length > 0 && (
                       <span className="estimated-text">
                         {" "}
-                        ({summary.estimatedBaselineYears.length} estimated:{" "}
+                        ({summary.estimatedBaselineYears.length} {t.analytics.estimatedYearsLabel.toLowerCase()}:{" "}
                         {formatYears(summary.estimatedBaselineYears)})
                       </span>
                     )}
                   </>
                 ) : resource.isLoading ? (
-                  "Loading…"
+                  loadingText
                 ) : (
-                  "Unavailable"
+                  unavailableText
                 )}
               </dd>
             </div>
             <div>
-              <dt>Archive Data Coverage</dt>
+              <dt>{t.analytics.coverageLabel}</dt>
               <dd>
                 {summary
                   ? summary.dataCoverage
-                    ? `${summary.dataCoverage.firstDate} to ${summary.dataCoverage.lastDate} UTC`
-                    : "No data"
+                    ? `${summary.dataCoverage.firstDate} ${t.shell.summaryCard.dateRangeTo} ${summary.dataCoverage.lastDate} UTC`
+                    : notAvailableText
                   : resource.isLoading
-                    ? "Loading…"
-                    : "Unavailable"}
+                    ? loadingText
+                    : unavailableText}
               </dd>
             </div>
           </dl>
@@ -852,7 +922,21 @@ export function HarmonizationPanel({
 }: {
   resource: ClientResource<HarmonizationResponse>;
 }) {
+  const { language } = useDashboardFilters();
+  const t = getTranslations(language);
   const info = resource.data?.info;
+  const loadingText =
+    language === "ceb"
+      ? "Nagkarga…"
+      : language === "fil"
+        ? "Nilo-load…"
+        : "Loading…";
+  const notAvailableText =
+    language === "ceb"
+      ? "Walay datos"
+      : language === "fil"
+        ? "Walang datos"
+        : "Not available";
 
   return (
     <section
@@ -861,69 +945,72 @@ export function HarmonizationPanel({
     >
       <div className="analytics-panel-heading">
         <div>
-          <p className="eyebrow">SENSOR NORMALIZATION</p>
-          <h2 id="harmonization-title">Cross-Sensor Harmonization</h2>
+          <p className="eyebrow">{t.analytics.harmonizationEyebrow}</p>
+          <h2 id="harmonization-title">{t.analytics.harmonizationTitle}</h2>
         </div>
         <span className="method-chip">
-          {info?.method ?? (resource.isLoading ? "Loading…" : "Not available")}
+          {info?.method ?? (resource.isLoading ? loadingText : notAvailableText)}
         </span>
       </div>
 
       <p className="analytics-panel-intro">
-        Scales historical 1km MODIS counts to 375m VIIRS-equivalent levels using
-        overlapping satellite observation years.
+        {language === "ceb"
+          ? "Nagpantay sa daan nga 1km MODIS ngadto sa sukdanan sa 375m VIIRS gamit ang mga tuig nga nagdungan ang duha ka satelayt."
+          : language === "fil"
+            ? "Pinapantay ang dating 1km MODIS patungo sa sukat ng 375m VIIRS gamit ang mga taong magkasabay ang dalawang satelayt."
+            : "Scales historical 1km MODIS counts to 375m VIIRS-equivalent levels using overlapping satellite observation years."}
       </p>
 
       {resource.error && (
         <p className="analytics-inline-error" role="alert">
-          Harmonization details could not be loaded: {resource.error.message}
+          {t.analytics.harmonizationUnavailable}: {resource.error.message}
         </p>
       )}
       {!info && !resource.isLoading && !resource.error && (
         <p className="analytics-inline-empty" role="status">
-          No harmonization information is available for this region.
+          {t.analytics.noHarmonizationData}
         </p>
       )}
 
       <dl className="analytics-details harmonization-details">
         <div>
-          <dt>MODIS-to-VIIRS Scaling Factor</dt>
+          <dt>{t.analytics.scalingFactorLabel || "MODIS-to-VIIRS Scaling Factor"}</dt>
           <dd>
             {info
               ? formatMetric(info.factor, "×")
               : resource.isLoading
-                ? "Loading…"
-                : "Not available"}
+                ? loadingText
+                : notAvailableText}
           </dd>
         </div>
         <div>
-          <dt>Overlap Calibration Years</dt>
+          <dt>{t.analytics.overlapYearsLabel || "Overlap Calibration Years"}</dt>
           <dd>
             {info
               ? formatYears(info.overlapYears)
               : resource.isLoading
-                ? "Loading…"
-                : "Not available"}
+                ? loadingText
+                : notAvailableText}
           </dd>
         </div>
         <div>
-          <dt>Calibration Agreement (r)</dt>
+          <dt>{t.analytics.correlationLabel || "Calibration Agreement (r)"}</dt>
           <dd>
             {info
               ? formatMetric(info.correlation)
               : resource.isLoading
-                ? "Loading…"
-                : "Not available"}
+                ? loadingText
+                : notAvailableText}
           </dd>
         </div>
         <div>
-          <dt>Calibration Error (MAPE)</dt>
+          <dt>{t.analytics.errorLabel || "Calibration Error (MAPE)"}</dt>
           <dd>
             {info
               ? formatMetric(info.errorPercent, "%")
               : resource.isLoading
-                ? "Loading…"
-                : "Not available"}
+                ? loadingText
+                : notAvailableText}
           </dd>
         </div>
       </dl>
@@ -984,6 +1071,8 @@ export function OverlapChart({
   summary?: AnalyticsSummary | null;
   calendar?: CalendarResponse | null;
 }) {
+  const { language } = useDashboardFilters();
+  const t = getTranslations(language);
   const [viewMode, setViewMode] = useState<"annual" | "monthly">("annual");
 
   const effectiveOverlap = buildFallbackOverlapPoints(resource.data, summary);
@@ -1056,6 +1145,37 @@ export function OverlapChart({
   );
   const gridTicks = Array.from(new Set([0, Math.round(maxCount / 2), maxCount]));
 
+  const rawModisLabel =
+    language === "ceb"
+      ? "Aktwal nga MODIS (1km)"
+      : language === "fil"
+        ? "Aktwal na MODIS (1km)"
+        : "Raw MODIS (1km)";
+  const scaledModisLabel =
+    language === "ceb"
+      ? "Gipantay nga MODIS"
+      : language === "fil"
+        ? "Pinantay na MODIS"
+        : "Scaled MODIS (Harmonized)";
+  const actualViirsLabel =
+    language === "ceb"
+      ? "Aktwal nga VIIRS (375m)"
+      : language === "fil"
+        ? "Aktwal na VIIRS (375m)"
+        : "Actual VIIRS (375m)";
+  const noDataLabel =
+    language === "ceb"
+      ? "Walay datos"
+      : language === "fil"
+        ? "Walang datos"
+        : "No data";
+  const monthHeaderLabel =
+    language === "ceb"
+      ? "Buwan"
+      : language === "fil"
+        ? "Buwan"
+        : "Month";
+
   return (
     <section
       className="analytics-panel overlap-panel"
@@ -1063,13 +1183,13 @@ export function OverlapChart({
     >
       <div className="analytics-panel-heading">
         <div>
-          <p className="eyebrow">SENSOR OVERLAP VERIFICATION</p>
-          <h2 id="overlap-title">MODIS vs. VIIRS Calibration Check</h2>
+          <p className="eyebrow">{t.analytics.overlapEyebrow}</p>
+          <h2 id="overlap-title">{t.analytics.overlapTitle}</h2>
         </div>
         <div
           className="overlap-view-toggle"
           role="group"
-          aria-label="Calibration chart view mode"
+          aria-label={t.analytics.overlapTitle}
         >
           <button
             type="button"
@@ -1079,7 +1199,7 @@ export function OverlapChart({
             aria-pressed={viewMode === "annual"}
             onClick={() => setViewMode("annual")}
           >
-            Yearly Totals
+            {t.analytics.yearlyTotals || "Yearly Totals"}
           </button>
           <button
             type="button"
@@ -1089,14 +1209,17 @@ export function OverlapChart({
             aria-pressed={viewMode === "monthly"}
             onClick={() => setViewMode("monthly")}
           >
-            Recent 12 Months
+            {t.analytics.recent12Months || "Recent 12 Months"}
           </button>
         </div>
       </div>
 
       <p className="analytics-panel-intro">
-        Compares raw 1km MODIS, harmonized MODIS estimates, and actual 375m
-        VIIRS detections across shared calibration periods.
+        {language === "ceb"
+          ? "Nagtandi sa aktwal nga 1km MODIS, gipantay nga MODIS, ug tinuod nga 375m VIIRS sa mga panahon nga nagdungan."
+          : language === "fil"
+            ? "Inihahambing ang aktwal na 1km MODIS, pinantay na MODIS, at tunay na 375m VIIRS sa mga panahong magkasabay."
+            : "Compares raw 1km MODIS, harmonized MODIS estimates, and actual 375m VIIRS detections across shared calibration periods."}
       </p>
 
       <div className="chart-legend">
@@ -1105,27 +1228,27 @@ export function OverlapChart({
             className="chart-legend-swatch modis-swatch"
             aria-hidden="true"
           />
-          Raw MODIS (1km)
+          {rawModisLabel}
         </span>
         <span>
           <span
             className="chart-legend-swatch scaled-modis-swatch"
             aria-hidden="true"
           />
-          Scaled MODIS (Harmonized)
+          {scaledModisLabel}
         </span>
         <span>
           <span
             className="chart-legend-swatch viirs-swatch"
             aria-hidden="true"
           />
-          Actual VIIRS (375m)
+          {actualViirsLabel}
         </span>
       </div>
 
       {resource.isLoading && effectiveOverlap.length === 0 ? (
         <p className="chart-message" role="status">
-          Loading overlap data…
+          {t.analytics.loadingOverlap}
         </p>
       ) : resource.error && effectiveOverlap.length === 0 ? (
         <p className="chart-message analytics-error" role="alert">
@@ -1133,14 +1256,14 @@ export function OverlapChart({
         </p>
       ) : displayPoints.length === 0 ? (
         <p className="chart-message" role="status">
-          Sensor overlap pairs are recorded at province and national levels; switch area scope to inspect MODIS vs. VIIRS calibration.
+          {t.analytics.noOverlapData}
         </p>
       ) : (
         <>
           <div
             className="chart-scroll"
             role="region"
-            aria-label="MODIS and VIIRS overlap chart"
+            aria-label={t.analytics.overlapTitle}
           >
             <svg
               className="overlap-chart"
@@ -1148,14 +1271,9 @@ export function OverlapChart({
               role="img"
               aria-labelledby="overlap-chart-title overlap-chart-desc"
             >
-              <title id="overlap-chart-title">
-                {viewMode === "annual"
-                  ? "Annual MODIS, scaled MODIS, and VIIRS calibration totals"
-                  : "Recent 12-month MODIS, scaled MODIS, and VIIRS overlap counts"}
-              </title>
+              <title id="overlap-chart-title">{t.analytics.overlapTitle}</title>
               <desc id="overlap-chart-desc">
-                MODIS, scaled MODIS, and VIIRS active cell-day counts per{" "}
-                {viewMode === "annual" ? "calibration year" : "overlap month"}.
+                {rawModisLabel} / {scaledModisLabel} / {actualViirsLabel}
               </desc>
 
               {gridTicks.map((tickVal, idx) => {
@@ -1193,17 +1311,17 @@ export function OverlapChart({
                 const startOffset = viewMode === "annual" ? -28 : -21;
                 const values = [
                   {
-                    label: "Raw MODIS (1km)",
+                    label: rawModisLabel,
                     value: point.modis,
                     className: "modis-bar",
                   },
                   {
-                    label: "Scaled MODIS (Harmonized)",
+                    label: scaledModisLabel,
                     value: point.modisScaled,
                     className: "scaled-modis-bar",
                   },
                   {
-                    label: "Actual VIIRS (375m)",
+                    label: actualViirsLabel,
                     value: point.viirs,
                     className: "viirs-bar",
                   },
@@ -1238,7 +1356,7 @@ export function OverlapChart({
                           <title>
                             {point.periodLabel} {label}:{" "}
                             {value === null
-                              ? "No data"
+                              ? noDataLabel
                               : value.toLocaleString("en-US")}
                           </title>
                           {value !== null && (
@@ -1284,16 +1402,20 @@ export function OverlapChart({
           </div>
           <details className="anomaly-technical-details">
             <summary>
-              View monthly overlap table ({effectiveOverlap.length} months)
+              {language === "ceb"
+                ? `Tan-awa ang binuwan nga lamesa (${effectiveOverlap.length} ka buwan)`
+                : language === "fil"
+                  ? `Tingnan ang buwanang talahanayan (${effectiveOverlap.length} buwan)`
+                  : `View monthly overlap table (${effectiveOverlap.length} months)`}
             </summary>
             <div className="overlap-table-wrap">
               <table className="overlap-data-table">
                 <thead>
                   <tr>
-                    <th scope="col">Month</th>
-                    <th scope="col">Raw MODIS (1km)</th>
-                    <th scope="col">Scaled MODIS</th>
-                    <th scope="col">Actual VIIRS (375m)</th>
+                    <th scope="col">{monthHeaderLabel}</th>
+                    <th scope="col">{rawModisLabel}</th>
+                    <th scope="col">{scaledModisLabel}</th>
+                    <th scope="col">{actualViirsLabel}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1302,9 +1424,9 @@ export function OverlapChart({
                       <th scope="row">
                         {point.year}-{String(point.month).padStart(2, "0")}
                       </th>
-                      <td>{formatCount(point.modis)}</td>
-                      <td>{formatCount(point.modisScaled)}</td>
-                      <td>{formatCount(point.viirs)}</td>
+                      <td>{formatCount(point.modis, noDataLabel)}</td>
+                      <td>{formatCount(point.modisScaled, noDataLabel)}</td>
+                      <td>{formatCount(point.viirs, noDataLabel)}</td>
                     </tr>
                   ))}
                 </tbody>

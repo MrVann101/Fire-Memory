@@ -3,24 +3,22 @@
 import Link from "next/link";
 import type { CalendarCell, CalendarResponse } from "@/contracts/types";
 import type { ClientResource } from "@/hooks/useClientResource";
+import { useDashboardFilters } from "@/components/dashboard/DashboardFiltersProvider";
+import {
+  getMonthName,
+  getTranslations,
+  type AppLanguage,
+} from "@/lib/i18n/translations";
 
 const countRamp = ["#f7b267", "#f49739", "#eb8220", "#cf4414", "#8b1c12"];
 const countTextRamp = ["#1f140e", "#1f140e", "#1f140e", "#ffffff", "#ffffff"];
 const monthInitials = ["J", "F", "M", "A", "M", "J", "J", "A", "S", "O", "N", "D"];
-const monthNames = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
+
+function getShortMonthNames(language: AppLanguage): string[] {
+  return Array.from({ length: 12 }, (_, idx) =>
+    getMonthName(idx + 1, language, true)
+  );
+}
 
 function colorForCount(count: number, maxCount: number): {
   backgroundColor: string;
@@ -34,17 +32,23 @@ function colorForCount(count: number, maxCount: number): {
   };
 }
 
-function cellDescription(cell: CalendarCell | undefined): string {
+function cellDescription(
+  cell: CalendarCell | undefined,
+  language: AppLanguage
+): string {
+  const t = getTranslations(language);
   if (!cell || cell.count === null) {
-    return "No data";
+    return t.calendar.noData;
   }
+  const formatted = cell.count.toLocaleString("en-US");
   if (cell.estimated) {
-    return `Estimated, ${cell.count.toLocaleString("en-US")} detections`;
+    return language === "ceb"
+      ? `Gibanabana, ${formatted} ka deteksyon`
+      : language === "fil"
+        ? `Tinataya, ${formatted} na deteksyon`
+        : `Estimated, ${formatted} detections`;
   }
-  if (cell.count === 0) {
-    return "0 detections";
-  }
-  return `${cell.count.toLocaleString("en-US")} detections`;
+  return t.map.popup.detectionsCount(cell.count);
 }
 
 export default function ActivityCalendar({
@@ -58,6 +62,9 @@ export default function ActivityCalendar({
   selectedMonth: number | null;
   onSelectMonth: (year: number, month: number) => void;
 }) {
+  const { language } = useDashboardFilters();
+  const t = getTranslations(language);
+  const monthNames = getShortMonthNames(language);
   const cells = resource.data?.cells ?? [];
   const firstYear = cells.reduce(
     (first, cell) => Math.min(first, cell.year),
@@ -108,7 +115,11 @@ export default function ActivityCalendar({
           ((selectedCell.count - prevYearCell.count) / prevYearCell.count) *
           100
         ).toLocaleString("en-US", { maximumFractionDigits: 1 })}% vs ${activeYear! - 1}`
-      : "No prior-year pair";
+      : language === "ceb"
+        ? "Walay pares sa miaging tuig"
+        : language === "fil"
+          ? "Walang kapareha sa nakaraang taon"
+          : "No prior-year pair";
 
   let peakCell: CalendarCell | null = null;
   let observedCount = 0;
@@ -143,10 +154,10 @@ export default function ActivityCalendar({
     return (
       <section className="calendar-workstation-state" aria-labelledby="calendar-title">
         <h2 id="calendar-title" className="sr-only">
-          Historical activity
+          {t.calendar.title}
         </h2>
         <div className="calendar-empty" role="status" aria-live="polite">
-          Loading calendar data…
+          {t.calendar.statusLoading}
         </div>
       </section>
     );
@@ -156,14 +167,14 @@ export default function ActivityCalendar({
     return (
       <section className="calendar-workstation-state" aria-labelledby="calendar-title">
         <h2 id="calendar-title" className="sr-only">
-          Historical activity
+          {t.calendar.title}
         </h2>
         <div className="calendar-empty calendar-error" role="alert">
           <span className="empty-state-symbol" aria-hidden="true">
             !
           </span>
           <div>
-            <h3>Calendar could not be loaded</h3>
+            <h3>{t.calendar.statusUnavailable}</h3>
             <p>{resource.error.message}</p>
           </div>
         </div>
@@ -175,19 +186,15 @@ export default function ActivityCalendar({
     return (
       <section className="calendar-workstation-state" aria-labelledby="calendar-title">
         <h2 id="calendar-title" className="sr-only">
-          Historical activity
+          {t.calendar.title}
         </h2>
         <div className="calendar-empty" role="status">
           <span className="empty-state-symbol" aria-hidden="true">
             i
           </span>
           <div>
-            <h3>{resource.data ? "No calendar data" : "Calendar unavailable"}</h3>
-            <p>
-              {resource.data
-                ? "There are no monthly values for this selection. No counts are inferred."
-                : "Select a region and month to load calendar data."}
-            </p>
+            <h3>{resource.data ? t.calendar.noData : t.calendar.statusUnavailable}</h3>
+            <p>{t.calendar.statusEmpty}</p>
           </div>
         </div>
       </section>
@@ -200,6 +207,46 @@ export default function ActivityCalendar({
       : "—";
   const mobileYears = [...years].reverse();
 
+  const statusTagLabel =
+    selectedCell?.estimated && selectedCell.count !== null
+      ? t.calendar.legendEstimated.toUpperCase()
+      : !selectedCell || selectedCell.count === null
+        ? t.calendar.noData.toUpperCase()
+        : t.calendar.recordedData.toUpperCase();
+
+  const selectedLabel =
+    language === "ceb" ? "Napili:" : language === "fil" ? "Napili:" : "Selected:";
+  const peakLabel =
+    language === "ceb"
+      ? "Kinatas-an:"
+      : language === "fil"
+        ? "Pinakamataas:"
+        : "Peak:";
+  const coverageLabel =
+    language === "ceb" ? "Sakop:" : language === "fil" ? "Saklaw:" : "Coverage:";
+  const estimatedLabel =
+    language === "ceb"
+      ? "Gibanabana:"
+      : language === "fil"
+        ? "Tinataya:"
+        : "Estimated:";
+  const mosUnit =
+    language === "ceb" ? "ka buwan" : language === "fil" ? "buwan" : "mos";
+  const yearColLabel =
+    language === "ceb" ? "Tuig" : language === "fil" ? "Taon" : "Year";
+  const selectedPeriodEyebrow =
+    language === "ceb"
+      ? "Napiling Panahon"
+      : language === "fil"
+        ? "Napiling Panahon"
+        : "Selected Period";
+  const intensityScaleEyebrow =
+    language === "ceb"
+      ? "Sukdanan sa Kakusog (Log)"
+      : language === "fil"
+        ? "Antas ng Tindi (Log)"
+        : "Intensity Scale (Log)";
+
   return (
     <>
       <section
@@ -209,18 +256,18 @@ export default function ActivityCalendar({
       <div className="calendar-matrix-pane">
         <div className="calendar-telemetry-strip">
           <h2 id="calendar-title" className="sr-only">
-            Historical activity
+            {t.calendar.title}
           </h2>
           <div className="telemetry-stat">
-            <span className="telemetry-stat-label">Selected:</span>
+            <span className="telemetry-stat-label">{selectedLabel}</span>
             <span className="telemetry-stat-value">
               {selectedCell && selectedCell.count !== null
                 ? `${periodCode} (${selectedCell.count.toLocaleString("en-US")})`
-                : `${periodCode} (No data)`}
+                : `${periodCode} (${t.calendar.noData})`}
             </span>
           </div>
           <div className="telemetry-stat">
-            <span className="telemetry-stat-label">Peak:</span>
+            <span className="telemetry-stat-label">{peakLabel}</span>
             <span className="telemetry-stat-value">
               {peakCell && peakCell.count !== null
                 ? `${peakCell.year}-${String(peakCell.month).padStart(2, "0")} (${peakCell.count.toLocaleString("en-US")})`
@@ -228,26 +275,28 @@ export default function ActivityCalendar({
             </span>
           </div>
           <div className="telemetry-stat">
-            <span className="telemetry-stat-label">Coverage:</span>
+            <span className="telemetry-stat-label">{coverageLabel}</span>
             <span className="telemetry-stat-value">
-              {observedCount}/{totalSlots} mos ({coveragePct}%)
+              {observedCount}/{totalSlots} {mosUnit} ({coveragePct}%)
             </span>
           </div>
           <div className="telemetry-stat">
-            <span className="telemetry-stat-label">Estimated:</span>
-            <span className="telemetry-stat-value">{estimatedCount} mos</span>
+            <span className="telemetry-stat-label">{estimatedLabel}</span>
+            <span className="telemetry-stat-value">
+              {estimatedCount} {mosUnit}
+            </span>
           </div>
         </div>
 
         <div
           className="calendar-table-wrap calendar-matrix-scroll"
           role="region"
-          aria-label="Monthly activity by year"
+          aria-label={t.calendar.sameMonthYearOverYear}
         >
           <table className="calendar-table calendar-table-fluid">
             <thead>
               <tr>
-                <th scope="col">Year</th>
+                <th scope="col">{yearColLabel}</th>
                 {monthNames.map((month) => (
                   <th scope="col" key={month}>
                     {month}
@@ -262,7 +311,7 @@ export default function ActivityCalendar({
                   {monthNames.map((_, monthIndex) => {
                     const month = monthIndex + 1;
                     const cell = cellByMonth.get(`${year}-${month}`);
-                    const description = cellDescription(cell);
+                    const description = cellDescription(cell, language);
                     const isNoData = !cell || cell.count === null;
                     const className = [
                       "calendar-cell",
@@ -316,25 +365,19 @@ export default function ActivityCalendar({
         </div>
       </div>
 
-      <aside className="calendar-inspector-rail" aria-label="Selected period inspector and legend">
+      <aside className="calendar-inspector-rail" aria-label={t.calendar.railTitleEmpty}>
         <div className="inspector-section">
           <div className="inspector-heading-row">
-            <span className="inspector-eyebrow">Selected Period</span>
-            <span className="inspector-status-tag">
-              {selectedCell?.estimated && selectedCell.count !== null
-                ? "ESTIMATED"
-                : !selectedCell || selectedCell.count === null
-                  ? "NO DATA"
-                  : "OBSERVED"}
-            </span>
+            <span className="inspector-eyebrow">{selectedPeriodEyebrow}</span>
+            <span className="inspector-status-tag">{statusTagLabel}</span>
           </div>
           <div className="inspector-period-title">
-            {activeYear !== null ? `${monthNames[activeMonth - 1]} ${activeYear}` : "No period"}
+            {activeYear !== null ? `${monthNames[activeMonth - 1]} ${activeYear}` : t.calendar.noData}
           </div>
           <div className="inspector-count-readout">
             {selectedCell && selectedCell.count !== null
               ? `${selectedCell.count.toLocaleString("en-US")} cell-days`
-              : "No satellite detections"}
+              : t.shell.summaryCard.noSavedDetections}
           </div>
           <div className="inspector-yoy-row">
             <span>YoY:</span>
@@ -344,7 +387,13 @@ export default function ActivityCalendar({
 
         <div className="inspector-section">
           <div className="inspector-eyebrow">
-            {activeYear !== null ? `${activeYear} Monthly Profile` : "Monthly Profile"}
+            {activeYear !== null
+              ? language === "ceb"
+                ? `Mga Buwan sa ${activeYear}`
+                : language === "fil"
+                  ? `Mga Buwan ng ${activeYear}`
+                  : `${activeYear} Monthly Profile`
+              : t.calendar.railTitleEmpty}
           </div>
           <div className="inspector-profile-bars" aria-hidden="true">
             {yearProfileValues.map((val, idx) => {
@@ -363,56 +412,59 @@ export default function ActivityCalendar({
             })}
           </div>
           <div className="inspector-profile-axis">
-            <span>Jan</span>
-            <span>Jun</span>
-            <span>Dec</span>
+            <span>{monthNames[0]}</span>
+            <span>{monthNames[5]}</span>
+            <span>{monthNames[11]}</span>
           </div>
         </div>
 
         <div className="inspector-section">
-          <div className="inspector-eyebrow">Intensity Scale (Log)</div>
+          <div className="inspector-eyebrow">{intensityScaleEyebrow}</div>
           <div className="inspector-ramp-bar" aria-hidden="true">
             {countRamp.map((color) => (
               <span key={color} style={{ backgroundColor: color }} />
             ))}
           </div>
           <div className="inspector-ramp-labels">
-            <span>Lower count</span>
-            <span>Higher count</span>
+            <span>{t.calendar.legendLess}</span>
+            <span>{t.calendar.legendMore}</span>
           </div>
           <div className="inspector-key-list">
             <span className="calendar-key">
               <span className="calendar-swatch no-data-swatch" aria-hidden="true" />
-              — No data
+              — {t.calendar.legendNoData}
             </span>
             <span className="calendar-key">
               <span className="calendar-swatch zero-swatch" aria-hidden="true" />
-              0 detections
+              {t.map.popup.detectionsCount(0)}
             </span>
             <span className="calendar-key">
               <span className="calendar-swatch estimated-swatch" aria-hidden="true" />
-              Hatched = Estimated
+              {t.calendar.statusEstimated}
             </span>
           </div>
         </div>
 
         <div className="inspector-footer-action">
           <Link href="/" className="inspector-map-cta">
-            View {periodCode} on Map →
+            {language === "ceb"
+              ? `Tan-awa ang ${periodCode} sa Mapa →`
+              : language === "fil"
+                ? `Tingnan ang ${periodCode} sa Mapa →`
+                : `View ${periodCode} on Map →`}
           </Link>
         </div>
       </aside>
     </section>
 
-      {/* Modern Mobile View (Apple Health / Whoop / Linear pattern, <= 760px) */}
       <section
         className="calendar-mobile-view"
-        aria-label="Mobile activity calendar"
+        aria-label={t.calendar.title}
       >
         <div
           className="mobile-year-pills"
           role="tablist"
-          aria-label="Select year"
+          aria-label={yearColLabel}
         >
           {mobileYears.map((year) => {
             const isSelectedYear = year === activeYear;
@@ -437,13 +489,8 @@ export default function ActivityCalendar({
               <div className="mobile-hero-eyebrow">
                 {activeYear !== null
                   ? `${monthNames[activeMonth - 1]} ${activeYear}`
-                  : "No period"}{" "}
-                ·{" "}
-                {selectedCell?.estimated && selectedCell.count !== null
-                  ? "ESTIMATED"
-                  : !selectedCell || selectedCell.count === null
-                    ? "NO DATA"
-                    : "OBSERVED"}
+                  : t.calendar.noData}{" "}
+                · {statusTagLabel}
               </div>
               <div className="mobile-hero-count">
                 {selectedCell && selectedCell.count !== null ? (
@@ -452,14 +499,14 @@ export default function ActivityCalendar({
                     <span>cell-days</span>
                   </>
                 ) : (
-                  <span>No data</span>
+                  <span>{t.calendar.noData}</span>
                 )}
               </div>
             </div>
             <div className="mobile-hero-meta">
               <div className="mobile-hero-yoy">{yoyText}</div>
               <div className="mobile-hero-peak">
-                Peak {yearProfileMax.toLocaleString("en-US")}
+                {peakLabel.replace(":", "")} {yearProfileMax.toLocaleString("en-US")}
               </div>
             </div>
           </div>
@@ -467,7 +514,7 @@ export default function ActivityCalendar({
           <div
             className="mobile-bar-chart"
             role="group"
-            aria-label={`${activeYear ?? ""} monthly bar chart`}
+            aria-label={`${activeYear ?? ""} ${t.calendar.sameMonthYearOverYear}`}
           >
             <div className="mobile-bars-row">
               {yearProfileValues.map((val, idx) => {
@@ -489,7 +536,8 @@ export default function ActivityCalendar({
                     aria-label={`${monthNames[idx]} ${activeYear ?? ""}: ${cellDescription(
                       activeYear !== null
                         ? cellByMonth.get(`${activeYear}-${month}`)
-                        : undefined
+                        : undefined,
+                      language
                     )}`}
                     aria-pressed={isSel}
                     onClick={() =>
@@ -558,7 +606,7 @@ export default function ActivityCalendar({
                   {val === null
                     ? "—"
                     : cell?.estimated
-                      ? `${val.toLocaleString("en-US")} est.`
+                      ? `${val.toLocaleString("en-US")} ${t.shell.summaryCard.estimatedSuffix}`
                       : val.toLocaleString("en-US")}
                 </span>
               </button>
@@ -567,9 +615,11 @@ export default function ActivityCalendar({
         </div>
 
         <div className="mobile-bottom-dock">
-          <span className="mobile-dock-period">{periodCode} selected</span>
+          <span className="mobile-dock-period">
+            {periodCode} {selectedLabel.replace(":", "").toLowerCase()}
+          </span>
           <Link href="/" className="mobile-map-cta">
-            Inspect on Map →
+            {t.calendar.viewOnMap}
           </Link>
         </div>
       </section>

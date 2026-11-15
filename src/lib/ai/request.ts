@@ -71,10 +71,15 @@ export const analyticsSummarySchema = z
   })
   .strict();
 
+export const languageSchema = z.enum(["en", "ceb", "fil"]);
+
+export type SupportedLanguage = z.infer<typeof languageSchema>;
+
 export const aiBriefRequestSchema = z
   .object({
     summary: analyticsSummarySchema,
     question: z.string().trim().min(1).max(AI_MAX_QUESTION_LENGTH),
+    language: languageSchema.optional().default("en"),
   })
   .strict();
 

@@ -33,7 +33,25 @@ async function fetchJson<T>(url: string, signal?: AbortSignal): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Request failed (${response.status}) for ${url}`);
+    let detail = "";
+    try {
+      const payload = (await response.json()) as {
+        error?: { message?: string } | string;
+        message?: string;
+      };
+      const serverMessage =
+        typeof payload?.error === "object" && payload.error?.message
+          ? payload.error.message
+          : typeof payload?.message === "string"
+            ? payload.message
+            : "";
+      if (serverMessage) {
+        detail = `: ${serverMessage}`;
+      }
+    } catch {
+      // Ignore non-JSON error responses.
+    }
+    throw new Error(`Request failed (${response.status}) for ${url}${detail}`);
   }
 
   return (await response.json()) as T;

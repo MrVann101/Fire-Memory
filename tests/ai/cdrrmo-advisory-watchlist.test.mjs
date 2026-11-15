@@ -10,8 +10,16 @@ import {
 } from "../../src/lib/ai/config.ts";
 import {
   buildDeterministicCdrrmoAdvisory,
+  createAiBrief,
+  getAiDisclaimer,
   validateBriefOutput,
 } from "../../src/lib/ai/brief.ts";
+import {
+  LANGUAGE_OPTIONS,
+  SUPPORTED_LANGUAGES,
+  getMonthName,
+  getTranslations,
+} from "../../src/lib/i18n/translations.ts";
 import { POST } from "../../src/app/api/ai/brief/route.ts";
 
 const ROOT = process.cwd();
@@ -747,4 +755,208 @@ test("Sidebar brand renders the FireMemory SVG logo instead of the FM badge", ()
     globalsCssSource,
     /\.sidebar-brand-mark\s*\{[^}]*background:\s*transparent;/,
   );
+});
+
+test("buildDeterministicCdrrmoAdvisory passes validateBriefOutput in en, ceb, and fil across all 5 anomaly labels and question intents", () => {
+  const labels = [
+    "below_baseline",
+    "near_baseline",
+    "above_baseline",
+    "unusually_high",
+    "not_calculable",
+  ];
+
+  const questionsByLanguage = {
+    en: [
+      "",
+      "Why do small-area (VIIRS) and wide-area (MODIS) sensor detections differ?",
+      "Which area needs immediate CDRRMO verification?",
+    ],
+    ceb: [
+      "",
+      "Nganong magkalahi ang ihap sa VIIRS ug MODIS?",
+      "Asang dapita ang unahon pagsusi sa CDRRMO?",
+    ],
+    fil: [
+      "",
+      "Bakit magkaiba ang bilang ng VIIRS at MODIS?",
+      "Aling lugar ang dapat unahing beripikahin ng CDRRMO?",
+    ],
+  };
+
+  for (const label of labels) {
+    const payload = {
+      ...bukidnonSummary,
+      label,
+      historicalMedian: label === "not_calculable" ? null : bukidnonSummary.historicalMedian,
+      anomalyPercent: label === "not_calculable" ? null : bukidnonSummary.anomalyPercent,
+      baselineYears: label === "not_calculable" ? [] : bukidnonSummary.baselineYears,
+      approximate: label === "not_calculable",
+    };
+
+    const sampleIndex = 0;
+    const enAnswer = buildDeterministicCdrrmoAdvisory(
+      payload,
+      questionsByLanguage.en[sampleIndex],
+      "en"
+    );
+    const cebAnswer = buildDeterministicCdrrmoAdvisory(
+      payload,
+      questionsByLanguage.ceb[sampleIndex],
+      "ceb"
+    );
+    const filAnswer = buildDeterministicCdrrmoAdvisory(
+      payload,
+      questionsByLanguage.fil[sampleIndex],
+      "fil"
+    );
+
+    assert.notEqual(cebAnswer, enAnswer);
+    assert.notEqual(filAnswer, enAnswer);
+    assert.notEqual(cebAnswer, filAnswer);
+
+    for (const language of SUPPORTED_LANGUAGES) {
+      for (const question of questionsByLanguage[language]) {
+        const answer = buildDeterministicCdrrmoAdvisory(payload, question, language);
+        const verdict = validateBriefOutput(answer, payload);
+        assert.equal(
+          verdict.valid,
+          true,
+          `Expected valid deterministic brief for language=${language}, label=${label}, question=${question}: ${verdict.reason ?? ""}`
+        );
+        assert.match(answer, /Computed values:/);
+        assert.match(answer, /Interpretation:/);
+        assert.match(answer, /Limitations:/);
+      }
+    }
+  }
+});
+
+test("createAiBrief refuses unsafe Cebuano and Filipino questions without calling Gemini and forwards safe language requests", async () => {
+  const unsafeCases = [
+    { language: "ceb", question: "Mobakwit na ba ta karon?" },
+    { language: "ceb", question: "Mokatap ba ang kalayo ugma?" },
+    { language: "fil", question: "Dapat na ba lumikas ngayon?" },
+    { language: "fil", question: "Kakalat ba ang sunog dito?" },
+  ];
+
+  for (const unsafeCase of unsafeCases) {
+    const result = await createAiBrief(
+      {
+        summary: bukidnonSummary,
+        question: unsafeCase.question,
+        language: unsafeCase.language,
+      },
+      async () => {
+        throw new Error("Generator should not be called for unsafe questions");
+      }
+    );
+    assert.equal(result.disclaimer, getAiDisclaimer(unsafeCase.language));
+    assert.match(result.answer, /Computed values:/);
+    assert.match(result.answer, /Interpretation:/);
+    assert.match(result.answer, /Limitations:/);
+  }
+
+  let capturedLanguage = null;
+  const mockCebuanoReply =
+    "Computed values: Sa Bukidnon, ang gidaghanon sa aktibong cell-days kay 12 (VIIRS 12, MODIS 7) batok sa median nga 8.\n\nInterpretation: Mas taas kini kay sa kasagaran sa buwan, busa makig-coordinate sa BFP ug Barangay DRRMC para sa ground verification.\n\nLimitations: Mga deteksyon sa init gikan sa satelayt lang kini ug dili kompirmadong sunog.";
+
+  const response = await createAiBrief(
+    {
+      summary: bukidnonSummary,
+      question: "Unsay kahimtang sa mga hotspot karon?",
+      language: "ceb",
+    },
+    async (request) => {
+      capturedLanguage = request.language;
+      return mockCebuanoReply;
+    }
+  );
+
+  assert.equal(capturedLanguage, "ceb");
+  assert.equal(response.answer, mockCebuanoReply);
+  assert.equal(response.disclaimer, getAiDisclaimer("ceb"));
+  assert.notEqual(getAiDisclaimer("ceb"), getAiDisclaimer("en"));
+  assert.notEqual(getAiDisclaimer("fil"), getAiDisclaimer("en"));
+});
+
+test("translations dictionary and whole-app multilingual switchers cover en, ceb, and fil cleanly", () => {
+  assert.deepEqual([...SUPPORTED_LANGUAGES], ["en", "ceb", "fil"]);
+  assert.equal(LANGUAGE_OPTIONS.length, 3);
+  assert.equal(getMonthName(1, "ceb"), "Enero");
+  assert.equal(getMonthName(11, "en"), "November");
+
+  const en = getTranslations("en");
+  const ceb = getTranslations("ceb");
+  const fil = getTranslations("fil");
+
+  assert.notEqual(ceb.nav.map, en.nav.map);
+  assert.notEqual(fil.nav.anomaly, en.nav.anomaly);
+  assert.notEqual(ceb.ai.title, en.ai.title);
+  assert.notEqual(fil.calendar.title, en.calendar.title);
+  assert.notEqual(ceb.analytics.anomalyTitle, en.analytics.anomalyTitle);
+  assert.notEqual(fil.exportPanel.title, en.exportPanel.title);
+  assert.notEqual(ceb.shell.mapCards.comparisonLabel, en.shell.mapCards.comparisonLabel);
+
+  for (const lang of SUPPORTED_LANGUAGES) {
+    const dict = getTranslations(lang);
+    assert.ok(dict.nav.map.length > 0);
+    assert.ok(dict.shell.mapCards.smallAreaSensor.length > 0);
+    assert.ok(dict.calendar.title.length > 0);
+    assert.ok(dict.analytics.anomalyTitle.length > 0);
+    assert.ok(dict.exportPanel.downloadHotspots.length > 0);
+    assert.ok(dict.ai.suggestedQuestions.length >= 3);
+  }
+
+  const providerSource = fs.readFileSync(
+    path.join(ROOT, "src/components/dashboard/DashboardFiltersProvider.tsx"),
+    "utf8"
+  );
+  const shellSource = fs.readFileSync(
+    path.join(ROOT, "src/components/dashboard/DashboardShell.tsx"),
+    "utf8"
+  );
+  const assistantSource = fs.readFileSync(
+    path.join(ROOT, "src/components/assistant/AssistantPanel.tsx"),
+    "utf8"
+  );
+  const mapSource = fs.readFileSync(
+    path.join(ROOT, "src/components/map/MapView.tsx"),
+    "utf8"
+  );
+  const leafletSource = fs.readFileSync(
+    path.join(ROOT, "src/components/map/LeafletCanvas.tsx"),
+    "utf8"
+  );
+  const calendarSource = fs.readFileSync(
+    path.join(ROOT, "src/components/calendar/ActivityCalendar.tsx"),
+    "utf8"
+  );
+  const analyticsSource = fs.readFileSync(
+    path.join(ROOT, "src/components/charts/AnalyticsPanels.tsx"),
+    "utf8"
+  );
+  const exportSource = fs.readFileSync(
+    path.join(ROOT, "src/components/export/ExportButton.tsx"),
+    "utf8"
+  );
+  const cssSource = fs.readFileSync(
+    path.join(ROOT, "src/app/globals.css"),
+    "utf8"
+  );
+
+  assert.match(providerSource, /fire-memory-language/);
+  assert.match(providerSource, /document\.documentElement\.lang = language/);
+  assert.match(shellSource, /sidebar-lang-panel/);
+  assert.match(shellSource, /id="calendar-language"/);
+  assert.match(shellSource, /id="feature-language"/);
+  assert.match(assistantSource, /assistant-lang-switcher/);
+  assert.match(assistantSource, /language,/);
+  assert.match(mapSource, /getTranslations\(language\)/);
+  assert.match(leafletSource, /getTranslations\(language\)/);
+  assert.match(calendarSource, /getTranslations\(language\)/);
+  assert.match(analyticsSource, /getTranslations\(language\)/);
+  assert.match(exportSource, /getTranslations\(language\)/);
+  assert.match(cssSource, /\.sidebar-lang-panel/);
+  assert.match(cssSource, /\.assistant-lang-switcher/);
 });

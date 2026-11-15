@@ -10,6 +10,11 @@ import type {
   Region,
 } from "@/contracts/types";
 import { MapContainer, TileLayer, useMap } from "react-leaflet";
+import {
+  getTranslations,
+  type AppLanguage,
+  type DashboardTranslations,
+} from "@/lib/i18n/translations";
 
 const TRANSPARENT_TILE_DATA_URI =
   "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
@@ -77,14 +82,22 @@ function getClusterBand(count: number): ActivityBand {
   return "low";
 }
 
-function displayValue(value: string | number | null): string {
-  return value === null ? "Not available" : String(value);
+function displayValue(
+  value: string | number | null,
+  fallbackText: string
+): string {
+  return value === null ? fallbackText : String(value);
 }
 
 const WIDE_POPUP_LABELS = new Set([
   "Acquisition time",
   "Acquisition time (UTC)",
+  "Oras sa pagkuha (UTC)",
+  "Oras ng pagkuha (UTC)",
   "CDRRMO guidance",
+  "Pagtutok sa CDRRMO",
+  "Pagsusuri ng CDRRMO",
+  "CDRRMO Drill-Down",
 ]);
 
 function popupContent(
@@ -130,7 +143,13 @@ function formatAcquisitionTime(value: string): string {
   }).format(timestamp)} UTC`;
 }
 
-function DetectionLayer({ hotspots }: { hotspots: Hotspot[] }) {
+function DetectionLayer({
+  hotspots,
+  t,
+}: {
+  hotspots: Hotspot[];
+  t: DashboardTranslations;
+}) {
   const map = useMap();
 
   useEffect(() => {
@@ -159,12 +178,10 @@ function DetectionLayer({ hotspots }: { hotspots: Hotspot[] }) {
       const band = getHotspotBand(hotspot);
       const bandColors = BUBBLE_COLORS[band];
       const sensorResolution =
-        hotspot.instrument === "VIIRS"
-          ? "375 m grid (VIIRS high-detail)"
-          : "1 km grid (MODIS wide-area)";
+        hotspot.instrument === "VIIRS" ? t.map.popup.viirsGrid : t.map.popup.modisGrid;
       const brightnessLabel =
         hotspot.brightness === null
-          ? "Not available"
+          ? t.map.popup.notAvailable
           : `${hotspot.brightness} K`;
 
       const marker = L.marker([hotspot.latitude, hotspot.longitude], {
@@ -174,24 +191,30 @@ function DetectionLayer({ hotspots }: { hotspots: Hotspot[] }) {
           iconSize: [16, 16],
           iconAnchor: [8, 8],
         }),
-        title: `Thermal Hotspot Detection (${hotspot.instrument}): ${hotspot.acquisitionDatetime}`,
+        title: `${t.map.popup.thermalDetection} (${hotspot.instrument}): ${hotspot.acquisitionDatetime}`,
         bubblingMouseEvents: false,
       });
 
       marker.bindPopup(
-        popupContent("Thermal Hotspot Detection", [
-          ["Latitude", hotspot.latitude.toFixed(5)],
-          ["Longitude", hotspot.longitude.toFixed(5)],
-          ["Satellite", hotspot.satellite],
-          ["Instrument", hotspot.instrument],
+        popupContent(t.map.popup.thermalDetection, [
+          [t.map.popup.latitude, hotspot.latitude.toFixed(5)],
+          [t.map.popup.longitude, hotspot.longitude.toFixed(5)],
+          [t.map.popup.satellite, hotspot.satellite],
+          [t.map.popup.instrument, hotspot.instrument],
           [
-            "Acquisition time (UTC)",
+            t.map.popup.acquisitionTimeUtc,
             formatAcquisitionTime(hotspot.acquisitionDatetime),
           ],
-          ["Sensor Resolution", sensorResolution],
-          ["Confidence", displayValue(hotspot.confidence)],
-          ["Fire Radiative / Brightness Temp", brightnessLabel],
-          ["Source product", displayValue(hotspot.sourceProduct)],
+          [t.map.popup.sensorResolution, sensorResolution],
+          [
+            t.map.popup.confidence,
+            displayValue(hotspot.confidence, t.map.popup.notAvailable),
+          ],
+          [t.map.popup.brightnessTemp, brightnessLabel],
+          [
+            t.map.popup.sourceProduct,
+            displayValue(hotspot.sourceProduct, t.map.popup.notAvailable),
+          ],
         ]),
         { maxWidth: 440 }
       );
@@ -205,7 +228,7 @@ function DetectionLayer({ hotspots }: { hotspots: Hotspot[] }) {
     return () => {
       map.removeLayer(cluster);
     };
-  }, [hotspots, map]);
+  }, [hotspots, map, t]);
 
   return null;
 }
@@ -216,7 +239,13 @@ function getFootprintRadius(hotspot: Hotspot): number {
   return hotspot.instrument === "VIIRS" ? 375 : 1_000;
 }
 
-function HotspotFootprintLayer({ hotspots }: { hotspots: Hotspot[] }) {
+function HotspotFootprintLayer({
+  hotspots,
+  t,
+}: {
+  hotspots: Hotspot[];
+  t: DashboardTranslations;
+}) {
   const map = useMap();
 
   useEffect(() => {
@@ -247,7 +276,7 @@ function HotspotFootprintLayer({ hotspots }: { hotspots: Hotspot[] }) {
         });
 
         footprint.bindTooltip(
-          `${hotspot.instrument} sensor resolution (~${radius} m radius — satellite scan area, not confirmed burn perimeter)`,
+          t.map.popup.formatFootprintTooltip(hotspot.instrument, radius),
           { direction: "top", opacity: 0.9 }
         );
         layer.addLayer(footprint);
@@ -264,7 +293,7 @@ function HotspotFootprintLayer({ hotspots }: { hotspots: Hotspot[] }) {
       map.off("moveend", renderFootprints);
       map.removeLayer(layer);
     };
-  }, [hotspots, map]);
+  }, [hotspots, map, t]);
 
   return null;
 }
@@ -273,10 +302,12 @@ function ChildBubbleLayer({
   childCounts,
   regions,
   onSelectRegion,
+  t,
 }: {
   childCounts: ChildCount[];
   regions: Region[];
   onSelectRegion: (regionId: string) => void;
+  t: DashboardTranslations;
 }) {
   const map = useMap();
 
@@ -303,8 +334,8 @@ function ChildBubbleLayer({
           : 8 + Math.sqrt(child.count / maxCount) * 9;
       const countLabel =
         child.count === null
-          ? "No data"
-          : `${child.count.toLocaleString("en-US")} detections`;
+          ? t.map.popup.noData
+          : t.map.popup.detectionsCount(child.count);
       const band =
         child.count === null
           ? "no-data"
@@ -338,7 +369,7 @@ function ChildBubbleLayer({
         path.setAttribute("role", "button");
         path.setAttribute(
           "aria-label",
-          `${child.name}: ${countLabel}. Select province.`
+          t.map.popup.selectProvinceAria(child.name, countLabel)
         );
         path.addEventListener("click", activateOnClick);
         path.addEventListener("keydown", activateOnKeyDown);
@@ -348,27 +379,18 @@ function ChildBubbleLayer({
         });
       });
 
-      const activityLabel =
-        band === "very-high"
-          ? "Very high relative activity"
-          : band === "high"
-            ? "High relative activity"
-            : band === "moderate"
-              ? "Moderate relative activity"
-              : band === "low"
-                ? "Low relative activity"
-                : "No data coverage";
+      const activityLabel = t.map.popup.activityBands[band];
 
       bubble.bindTooltip(`${child.name}: ${countLabel}`, {
         direction: "top",
         className: "province-bubble-label",
       });
       bubble.bindPopup(
-        popupContent(`${child.name} — Province Hotspot Summary`, [
-          ["Thermal Hotspot Detections", countLabel],
-          ["Relative Activity Level", activityLabel],
-          ["Marker Placement", "Approximate province bounding-box center"],
-          ["CDRRMO Drill-Down", "Select bubble to inspect province hotspots"],
+        popupContent(`${child.name} — ${t.map.popup.provinceSummarySuffix}`, [
+          [t.map.popup.thermalHotspotDetections, countLabel],
+          [t.map.popup.relativeActivityLevel, activityLabel],
+          [t.map.popup.markerPlacement, t.map.popup.markerPlacementValue],
+          [t.map.popup.cdrrmoDrillDown, t.map.popup.cdrrmoDrillDownValue],
         ])
       );
       bubble.on("click", () => onSelectRegion(child.regionId));
@@ -379,7 +401,7 @@ function ChildBubbleLayer({
     return () => {
       map.removeLayer(layer);
     };
-  }, [childCounts, map, onSelectRegion, regions]);
+  }, [childCounts, map, onSelectRegion, regions, t]);
 
   return null;
 }
@@ -531,6 +553,7 @@ export default function LeafletCanvas({
   onSelectRegion,
   drawRectangle,
   onRectangleComplete,
+  language = "en",
 }: {
   hotspots: Hotspot[];
   selectedRegion: Region | null;
@@ -542,7 +565,9 @@ export default function LeafletCanvas({
   onSelectRegion: (regionId: string) => void;
   drawRectangle: boolean;
   onRectangleComplete: (bbox: BBox) => void;
+  language?: AppLanguage;
 }) {
+  const t = getTranslations(language);
   return (
     <MapContainer
       center={[12.8, 121.8]}
@@ -554,7 +579,7 @@ export default function LeafletCanvas({
       zoomAnimation={true}
       fadeAnimation={true}
       className="leaflet-map"
-      aria-label="Cloud-free Philippine thermal hotspot monitoring map"
+      aria-label={t.nav.map}
     >
       <TileLayer
         key="carto-voyager-underlay"
@@ -588,12 +613,13 @@ export default function LeafletCanvas({
         errorTileUrl={TRANSPARENT_TILE_DATA_URI}
       />
       <RegionViewport region={selectedRegion} />
-      <DetectionLayer hotspots={hotspots} />
-      <HotspotFootprintLayer hotspots={hotspots} />
+      <DetectionLayer hotspots={hotspots} t={t} />
+      <HotspotFootprintLayer hotspots={hotspots} t={t} />
       <ChildBubbleLayer
         childCounts={childCounts}
         regions={regions}
         onSelectRegion={onSelectRegion}
+        t={t}
       />
       <RectangleDrawControl
         enabled={drawRectangle}
